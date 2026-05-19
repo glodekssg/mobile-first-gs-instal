@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1e3a8a;
+  --color-secondary: #f97316;
+  --color-accent: #ea580c;
+  --color-background: #ffffff;
+  --color-surface: #f1f5f9;
+  --font-sans: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans bg-background text-slate-900;
+  }
+
+  /* WCAG: widoczny pierścień focus dla nawigacji klawiaturą */
+  *:focus-visible {
+    outline: 3px solid #ea580c;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* Standardowe :focus bez klawiatury — dyskretne */
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* WCAG: tap target min. 44px na mobile */
+  button, a[role="button"], [type="submit"], [type="button"] {
+    min-height: 32px;
+  }
+
+  /* Hierarchia nagłówków */
+  h1 { line-height: 1.2; }
+  h2 { line-height: 1.25; }
+  h3 { line-height: 1.3; }
+}
+
+/* Skip-to-content link (WCAG 2.4.1 Bypass Blocks) */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 9999;
+  background: #ea580c;
+  color: white;
+  padding: 0.75rem 1.25rem;
+  font-weight: 700;
+  border-radius: 0 0 8px 0;
+  text-decoration: none;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0;
+}
+
+/* Parallax */
+.parallax-bg {
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+/* WCAG 2.3.3 / 2.2.2 — respektuj prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Subtelne podświetlenie kafelków usług gdy karta jest "featured" */
+.service-card-featured {
+  position: relative;
+  overflow: hidden;
+}
+.service-card-featured::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -30%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(234, 88, 12, 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+/* Line-clamp utility (fallback gdy nie ma w Tailwind) */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

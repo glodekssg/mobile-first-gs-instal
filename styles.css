@@ -1,0 +1,130 @@
+/* Resetowanie domyślnych stylów przeglądarki */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Stylowanie strony */
+body {
+  background-color: black;
+  color: white;
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* Kontener dla środkowania zawartości */
+.container {
+  max-width: 1200px;
+  padding: 20px;
+  width: 100%;
+}
+
+body {
+  background-color: black;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+header {
+  text-align: center;
+}
+
+main {
+  width: 80%;
+  margin: 0 auto;
+  text-align: center;
+}
+
+h1 {
+  font-size: 2.5rem;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
+  margin-bottom: 20px;
+}
+
+h2 {
+  font-size: 1.8rem;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
+  margin-bottom: 10px;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid white;
+  margin: 20px 0;
+}
+
+p {
+  font-size: 1.2rem;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+ul {
+  list-style-type: none;
+  padding-left: 20%;
+  text-align: left;
+}
+
+ul li {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+ul li:before {
+  content: "-";
+  position: absolute;
+  left: -20px;
+}
+
+/* Stylowanie sekcji kontaktowej */
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.contact-info span {
+  margin-bottom: 10px;
+}
+
+/* Efekt "wow" dla nagłówków */
+h1, h2 {
+  animation: fadeInDown 1s ease-in-out;
+}
+
+@keyframes fadeInDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+
+  h1, h2 {
+    font-size: 20px;
+  }
+
+  ul {
+    padding-left: 1em;
+  }
+
+  ul li::before {
+    left: -1em;
+  }
+}
