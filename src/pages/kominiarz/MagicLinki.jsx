@@ -1,10 +1,13 @@
-// Kominiarz może wysyłać magic linki z zaawansowanymi opcjami
 import { useEffect, useState } from 'react';
+import { Plus, Copy, ExternalLink, Ban, Link as LinkIcon, Check } from 'lucide-react';
 import { api } from '../../lib/api';
-import { fmtDateTime, visitTypeLabel } from '../../lib/format';
+import { fmtDateTime } from '../../lib/format';
 import SlotConfigEditor from '../../components/SlotConfigEditor';
 import SelectOrCreate from '../../components/SelectOrCreate';
 import { createApartment } from '../../lib/creators';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import BottomSheet from '../../components/mobile/BottomSheet';
+import EmptyState from '../../components/mobile/EmptyState';
 
 const SERVICE_TYPES = [
   { k: 'kontrola', l: 'Kontrola okresowa' },
@@ -30,6 +33,7 @@ export default function KominiarzMagicLinki() {
   const [show, setShow] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [created, setCreated] = useState(null);
+  const [copied, setCopied] = useState(null);
 
   function load() {
     api('/magic-links').then(setLinks);
@@ -71,7 +75,8 @@ export default function KominiarzMagicLinki() {
   function copy(token) {
     const url = `${location.origin}/p/${token}`;
     navigator.clipboard.writeText(url);
-    alert('Skopiowano:\n' + url);
+    setCopied(token);
+    setTimeout(() => setCopied(null), 1500);
   }
   function toggleService(field, key) {
     setForm(f => {
@@ -80,190 +85,187 @@ export default function KominiarzMagicLinki() {
       return { ...f, [field]: next };
     });
   }
+  function openNew() { setShow(true); setCreated(null); setForm(EMPTY_FORM); }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Magic linki</h1>
-          <p className="text-slate-500 text-sm">Wyślij link do mieszkańca — zarządza wizytami bez logowania. Możesz ograniczyć daty i typy usług.</p>
-        </div>
-        <button onClick={() => { setShow(true); setCreated(null); setForm(EMPTY_FORM); }}
-          className="px-4 py-2 bg-orange-500 text-white rounded">+ Wygeneruj link</button>
+    <div className="panel-page">
+      <MobilePageHeader title="Magic linki" subtitle="Linki dostępu bez logowania" />
+
+      <div className="mobile-stack">
+        {links.length === 0 ? (
+          <EmptyState icon={LinkIcon} title="Brak linków" body="Wygeneruj pierwszy link dla mieszkańca." action={<button onClick={openNew} className="btn-primary">+ Wygeneruj link</button>} />
+        ) : (
+          links.map(l => {
+            const isExpired = new Date(l.expires_at) < new Date();
+            const stateChip = l.revoked
+              ? { label: 'Unieważniony', cls: 'bg-rose-100 text-rose-700' }
+              : isExpired ? { label: 'Wygasły', cls: 'bg-slate-100 text-slate-500' }
+              : { label: 'Aktywny', cls: 'bg-emerald-100 text-emerald-700' };
+            return (
+              <article key={l.id} className="mobile-card">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-900 truncate">{l.profile_name || l.full_name || '(anonim)'}</div>
+                    <div className="text-xs text-slate-500 truncate">{l.phone} {l.email}</div>
+                  </div>
+                  <span className={`chip ${stateChip.cls} flex-shrink-0`}>{stateChip.label}</span>
+                </div>
+                {l.address && (
+                  <div className="text-xs text-slate-500 mt-2">📍 {l.address}{l.apt_number ? `, m. ${l.apt_number}` : ''}</div>
+                )}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {(l.slots_from || l.slots_to) && <span className="chip bg-blue-100 text-blue-700">📅 {l.slots_from?.slice(0, 10) || '∞'}–{l.slots_to?.slice(0, 10) || '∞'}</span>}
+                  {(l.slot_hour_from != null || l.slot_hour_to != null) && <span className="chip bg-blue-100 text-blue-700">⏰ {l.slot_hour_from ?? 8}:00–{l.slot_hour_to ?? 16}:00</span>}
+                  {l.slot_duration_min && <span className="chip bg-emerald-100 text-emerald-700">⏱ {l.slot_duration_min} min</span>}
+                  {l.allowed_services && <span className="chip bg-orange-100 text-orange-700">🔧 {l.allowed_services.length} usług</span>}
+                </div>
+                <div className="text-xs text-slate-400 mt-2">Ważny do {fmtDateTime(l.expires_at).split(',')[0]}</div>
+                <div className="flex gap-2 mt-3">
+                  <button onClick={() => copy(l.token)} className="btn-secondary flex-1">
+                    {copied === l.token ? <><Check className="w-4 h-4 text-emerald-600" /> Skopiowano</> : <><Copy className="w-4 h-4" /> Kopiuj</>}
+                  </button>
+                  <a href={`/p/${l.token}`} target="_blank" rel="noreferrer" className="btn-secondary flex-1">
+                    <ExternalLink className="w-4 h-4" /> Otwórz
+                  </a>
+                  {!l.revoked && (
+                    <button onClick={() => revoke(l.id)} className="btn-secondary text-rose-600">
+                      <Ban className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })
+        )}
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="overflow-x-auto w-full pb-2"><table className="w-full text-sm whitespace-nowrap min-w-[600px]">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
-            <tr>
-              <th className="text-left p-3">Dla kogo</th>
-              <th className="text-left p-3">Adres</th>
-              <th className="text-left p-3">Ograniczenia</th>
-              <th className="text-left p-3">Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {links.map(l => (
-              <tr key={l.id} className="hover:bg-slate-50">
-                <td className="p-3">
-                  <div className="font-medium">{l.profile_name || l.full_name || '(anonim)'}</div>
-                  <div className="text-xs text-slate-500">{l.phone} {l.email}</div>
-                </td>
-                <td className="p-3 text-slate-500 text-sm">{l.address || '—'}{l.apt_number ? `, m. ${l.apt_number}` : ''}</td>
-                <td className="p-3 text-xs space-y-0.5">
-                  {(l.slots_from || l.slots_to) && (
-                    <div className="text-blue-700">📅 {l.slots_from?.slice(0, 10) || '∞'} – {l.slots_to?.slice(0, 10) || '∞'}</div>
-                  )}
-                  {(l.slot_hour_from != null || l.slot_hour_to != null) && (
-                    <div className="text-blue-700">⏰ {l.slot_hour_from ?? 8}:00 – {l.slot_hour_to ?? 16}:00</div>
-                  )}
-                  {l.slot_duration_min && (
-                    <div className="text-emerald-700">⏱ {l.slot_duration_min} min</div>
-                  )}
-                  {l.slot_weekdays && (
-                    <div className="text-blue-700">📆 {l.slot_weekdays.length} dni</div>
-                  )}
-                  {l.allowed_services && (
-                    <div className="text-orange-700">🔧 {l.allowed_services.length} usług</div>
-                  )}
-                  <div className="text-slate-400">do {fmtDateTime(l.expires_at).split(',')[0]}</div>
-                </td>
-                <td className="p-3">
-                  {l.revoked ? <span className="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded">Unieważniony</span>
-                    : new Date(l.expires_at) < new Date() ? <span className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded">Wygasły</span>
-                    : <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">Aktywny</span>}
-                </td>
-                <td className="p-3 text-right whitespace-nowrap">
-                  <button onClick={() => copy(l.token)} className="text-orange-600 text-sm hover:underline mr-3">Kopiuj</button>
-                  <a href={`/p/${l.token}`} target="_blank" rel="noreferrer" className="text-blue-600 text-sm hover:underline mr-3">Otwórz</a>
-                  {!l.revoked && <button onClick={() => revoke(l.id)} className="text-rose-600 text-sm hover:underline">Unieważnij</button>}
-                </td>
-              </tr>
-            ))}
-            {links.length === 0 && <tr><td colSpan="5" className="p-10 text-center text-slate-400">Brak linków.</td></tr>}
-          </tbody>
-        </table></div>
-      </div>
+      <button onClick={openNew} className="fab md:hidden" aria-label="Wygeneruj link">
+        <Plus className="w-6 h-6" strokeWidth={2.5} />
+      </button>
 
-      {show && (
-        <Modal onClose={() => { setShow(false); setCreated(null); }}>
-          {created ? (
-            <div className="space-y-3">
-              <h3 className="font-semibold text-lg">✓ Link gotowy</h3>
-              <code className="block break-all bg-emerald-50 p-3 rounded text-xs">{location.origin}{created.url}</code>
-              <button onClick={() => { navigator.clipboard.writeText(`${location.origin}${created.url}`); alert('Skopiowano!'); }}
-                className="w-full bg-orange-500 text-white py-2 rounded">Skopiuj</button>
-              <a href={created.url} target="_blank" rel="noreferrer"
-                className="w-full block text-center border py-2 rounded hover:bg-slate-50">Podgląd jako prospect</a>
-              <button onClick={() => { setShow(false); setCreated(null); }} className="w-full text-sm text-slate-500">Zamknij</button>
-            </div>
-          ) : (
-            <form onSubmit={create} className="space-y-4">
-              <h3 className="font-semibold text-lg">Nowy magic link</h3>
-
-              <SelectOrCreate
-                label="Dla mieszkania (opcjonalnie — żeby mieszkaniec mógł umawiać/przekładać wizyty)"
-                value={form.apartment_id}
-                onChange={v => setForm(f => ({ ...f, apartment_id: v }))}
-                options={apartments}
-                getLabel={a => `${a.building_address}, m. ${a.number}${a.resident_name ? ` (${a.resident_name})` : ''}`}
-                emptyLabel="— bez mieszkania (tylko zgłoszenia) —"
-                createTitle="Szybkie nowe mieszkanie (do istniejącego budynku)"
-                createFields={[
-                  { k: 'building_id', label: 'ID budynku', required: true, type: 'number', placeholder: 'np. 1' },
-                  { k: 'number', label: 'Numer mieszkania', required: true },
-                  { k: 'floor', label: 'Piętro' },
-                ]}
-                onCreate={async (data) => {
-                  const a = await createApartment(data);
-                  const next = await api('/apartments');
-                  // refresh w komponencie nadrzędnym - apartments tu jest lokalnie
-                  // załaduj nową listę przez load()
-                  load();
-                  return a;
-                }}
-              />
-
-              <div className="grid grid-cols-2 gap-2">
-                <input className="border rounded p-2 text-sm" placeholder="Imię i nazwisko"
+      <BottomSheet
+        open={show}
+        onClose={() => { setShow(false); setCreated(null); }}
+        title={created ? '✓ Link gotowy' : 'Nowy magic link'}
+        footer={created ? null : (
+          <button form="ml-form" type="submit" className="btn-primary w-full py-3.5">Wygeneruj link</button>
+        )}
+      >
+        {created ? (
+          <div className="space-y-3">
+            <code className="block break-all bg-emerald-50 p-3 rounded-xl text-xs">{location.origin}{created.url}</code>
+            <button onClick={() => { navigator.clipboard.writeText(`${location.origin}${created.url}`); alert('Skopiowano!'); }}
+              className="btn-primary w-full py-3">
+              <Copy className="w-4 h-4" /> Skopiuj
+            </button>
+            <a href={created.url} target="_blank" rel="noreferrer" className="btn-secondary w-full py-3">
+              <ExternalLink className="w-4 h-4" /> Podgląd jako prospect
+            </a>
+          </div>
+        ) : (
+          <form id="ml-form" onSubmit={create} className="space-y-3">
+            <SelectOrCreate
+              label="Dla mieszkania (opcjonalnie)"
+              value={form.apartment_id}
+              onChange={v => setForm(f => ({ ...f, apartment_id: v }))}
+              options={apartments}
+              getLabel={a => `${a.building_address}, m. ${a.number}${a.resident_name ? ` (${a.resident_name})` : ''}`}
+              emptyLabel="— bez mieszkania —"
+              createTitle="Szybkie nowe mieszkanie"
+              createFields={[
+                { k: 'building_id', label: 'ID budynku', required: true, type: 'number', placeholder: 'np. 1' },
+                { k: 'number', label: 'Numer mieszkania', required: true },
+                { k: 'floor', label: 'Piętro' },
+              ]}
+              onCreate={async (data) => {
+                const a = await createApartment(data);
+                load();
+                return a;
+              }}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="form-label">Imię i nazwisko</label>
+                <input className="form-input" autoComplete="name"
                   value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
-                <input className="border rounded p-2 text-sm" placeholder="Telefon" type="tel"
+              </div>
+              <div>
+                <label className="form-label">Telefon</label>
+                <input className="form-input" type="tel" inputMode="tel" autoComplete="tel"
                   value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
               </div>
-              <input className="w-full border rounded p-2 text-sm" placeholder="Email" type="email"
+            </div>
+            <div>
+              <label className="form-label">Email</label>
+              <input className="form-input" type="email" inputMode="email" autoComplete="email"
                 value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
 
-              <div className="border-t pt-3">
-                <label className="text-sm font-medium block mb-2">📅 Zakres dat dostępnych slotów (opcjonalnie)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input className="border rounded p-2 text-sm" type="date" placeholder="Od"
-                    value={form.slots_from} onChange={e => setForm(f => ({ ...f, slots_from: e.target.value }))} />
-                  <input className="border rounded p-2 text-sm" type="date" placeholder="Do"
-                    value={form.slots_to} onChange={e => setForm(f => ({ ...f, slots_to: e.target.value }))} />
-                </div>
-                <div className="text-xs text-slate-400 mt-1">Puste = mieszkaniec może wybrać dowolny termin z kalendarza kominiarza.</div>
+            <details>
+              <summary className="form-label cursor-pointer">📅 Zakres dat slotów (opcjonalnie)</summary>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <input className="form-input" type="date"
+                  value={form.slots_from} onChange={e => setForm(f => ({ ...f, slots_from: e.target.value }))} />
+                <input className="form-input" type="date"
+                  value={form.slots_to} onChange={e => setForm(f => ({ ...f, slots_to: e.target.value }))} />
               </div>
+              <p className="text-xs text-slate-500 mt-1">Puste = dowolny termin.</p>
+            </details>
 
-              <SlotConfigEditor form={form} setForm={setForm} />
-
-              <div className="border-t pt-3">
-                <label className="text-sm font-medium block mb-2">🔧 Dozwolone usługi (opcjonalnie)</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {SERVICE_TYPES.map(s => (
-                    <label key={s.k} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={form.allowed_services.includes(s.k)}
-                        onChange={() => toggleService('allowed_services', s.k)} />
-                      {s.l}
-                    </label>
-                  ))}
-                </div>
-                <div className="text-xs text-slate-400 mt-1">Puste = wszystkie usługi dostępne.</div>
+            <details>
+              <summary className="form-label cursor-pointer">⏰ Konfiguracja slotów</summary>
+              <div className="mt-2">
+                <SlotConfigEditor form={form} setForm={setForm} />
               </div>
+            </details>
 
-              <div className="border-t pt-3">
-                <label className="text-sm font-medium block mb-2">💡 Sugerowane usługi (pokażą się jako CTA)</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {SERVICE_TYPES.map(s => (
-                    <label key={s.k} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={form.suggested_services.includes(s.k)}
-                        onChange={() => toggleService('suggested_services', s.k)} />
-                      {s.l}
-                    </label>
-                  ))}
-                </div>
+            <details>
+              <summary className="form-label cursor-pointer">🔧 Dozwolone usługi</summary>
+              <div className="grid grid-cols-2 gap-1.5 mt-2">
+                {SERVICE_TYPES.map(s => (
+                  <label key={s.k} className="flex items-center gap-2 text-sm py-1.5">
+                    <input type="checkbox" className="w-5 h-5 accent-orange-500"
+                      checked={form.allowed_services.includes(s.k)}
+                      onChange={() => toggleService('allowed_services', s.k)} />
+                    {s.l}
+                  </label>
+                ))}
               </div>
+            </details>
 
-              <div className="border-t pt-3 flex items-center justify-between">
-                <label className="text-sm">Ważność linku:</label>
-                <select className="border rounded p-1.5 text-sm" value={form.days}
-                  onChange={e => setForm(f => ({ ...f, days: Number(e.target.value) }))}>
-                  <option value={7}>7 dni</option>
-                  <option value={30}>30 dni</option>
-                  <option value={90}>90 dni</option>
-                  <option value={365}>1 rok</option>
-                </select>
+            <details>
+              <summary className="form-label cursor-pointer">💡 Sugerowane usługi (CTA)</summary>
+              <div className="grid grid-cols-2 gap-1.5 mt-2">
+                {SERVICE_TYPES.map(s => (
+                  <label key={s.k} className="flex items-center gap-2 text-sm py-1.5">
+                    <input type="checkbox" className="w-5 h-5 accent-orange-500"
+                      checked={form.suggested_services.includes(s.k)}
+                      onChange={() => toggleService('suggested_services', s.k)} />
+                    {s.l}
+                  </label>
+                ))}
               </div>
+            </details>
 
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.send} onChange={e => setForm(f => ({ ...f, send: e.target.checked }))} />
-                Wyślij SMS/email z linkiem (mock — wpis w powiadomieniach)
-              </label>
+            <div>
+              <label className="form-label">Ważność</label>
+              <select className="form-input" value={form.days}
+                onChange={e => setForm(f => ({ ...f, days: Number(e.target.value) }))}>
+                <option value={7}>7 dni</option>
+                <option value={30}>30 dni</option>
+                <option value={90}>90 dni</option>
+                <option value={365}>1 rok</option>
+              </select>
+            </div>
 
-              <button className="w-full bg-orange-500 text-white py-2 rounded font-medium">Wygeneruj link</button>
-            </form>
-          )}
-        </Modal>
-      )}
+            <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+              <input type="checkbox" className="w-5 h-5 accent-orange-500"
+                checked={form.send} onChange={e => setForm(f => ({ ...f, send: e.target.checked }))} />
+              <span className="text-sm">Wyślij SMS/email z linkiem</span>
+            </label>
+          </form>
+        )}
+      </BottomSheet>
     </div>
   );
-}
-
-function Modal({ children, onClose }) {
-  return <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-auto">
-      <button onClick={onClose} className="float-right text-slate-400">✕</button>
-      {children}
-    </div>
-  </div>;
 }

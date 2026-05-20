@@ -1,26 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Phone, MessageSquare, UserPlus, Send, ArrowRight, UserPlus2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fmtDateTime } from '../../lib/format';
 import SelectOrCreate from '../../components/SelectOrCreate';
 import { createApartment, createBuilding, buildingFields } from '../../lib/creators';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import BottomSheet from '../../components/mobile/BottomSheet';
+import FilterBar from '../../components/mobile/FilterBar';
+import EmptyState from '../../components/mobile/EmptyState';
 
-const STATUS_BADGE = {
-  new: 'bg-blue-100 text-blue-700',
-  contacted: 'bg-amber-100 text-amber-700',
-  scheduled: 'bg-emerald-100 text-emerald-700',
-  converted: 'bg-emerald-200 text-emerald-800',
-  rejected: 'bg-slate-100 text-slate-500',
+const STATUS = {
+  new: { label: 'Nowy', cls: 'bg-blue-100 text-blue-700' },
+  contacted: { label: 'Kontakt', cls: 'bg-amber-100 text-amber-700' },
+  scheduled: { label: 'Umówiony', cls: 'bg-emerald-100 text-emerald-700' },
+  converted: { label: 'Klient', cls: 'bg-emerald-200 text-emerald-800' },
+  rejected: { label: 'Odrzucony', cls: 'bg-slate-100 text-slate-500' },
 };
-const STATUS_LABEL = { new: 'Nowy', contacted: 'Kontakt', scheduled: 'Umówiony', converted: 'Klient', rejected: 'Odrzucony' };
 
 export default function Leady() {
   const [leads, setLeads] = useState([]);
   const [apartments, setApartments] = useState([]);
-  const [buildings, setBuildings] = useState([]);
+  const [, setBuildings] = useState([]);
   const [params, setParams] = useSearchParams();
   const filter = params.get('status') || 'all';
-  const [modal, setModal] = useState(null); // { type: 'contact'|'convert', lead }
+  const [sheet, setSheet] = useState(null);
   const [msg, setMsg] = useState('');
   const [convertForm, setConvertForm] = useState({ create_account: true, apartment_id: '', schedule_visit: false, visit_when: '', visit_type: 'kontrola' });
   const [contactForm, setContactForm] = useState({ channel: 'email', body: '' });
@@ -37,19 +41,14 @@ export default function Leady() {
     await api(`/leads/${id}`, { method: 'PATCH', body: { status } });
     load();
   }
-  function setFilter(s) {
-    const n = new URLSearchParams(params);
-    if (s === 'all') n.delete('status'); else n.set('status', s);
-    setParams(n);
-  }
 
   async function sendContact() {
     if (!contactForm.body) return;
     setBusy(true);
     try {
-      await api(`/leads/${modal.lead.id}/contact`, { method: 'POST', body: contactForm });
-      setMsg('✓ Wiadomość wysłana.');
-      setModal(null); setContactForm({ channel: 'email', body: '' });
+      await api(`/leads/${sheet.lead.id}/contact`, { method: 'POST', body: contactForm });
+      setMsg('Wiadomość wysłana.');
+      setSheet(null); setContactForm({ channel: 'email', body: '' });
       load();
     } catch (e) { setMsg(e.message); }
     finally { setBusy(false); }
@@ -62,125 +61,142 @@ export default function Leady() {
       if (body.apartment_id) body.apartment_id = Number(body.apartment_id); else delete body.apartment_id;
       if (body.schedule_visit && body.visit_when) body.visit_when = new Date(body.visit_when).toISOString();
       else { delete body.schedule_visit; delete body.visit_when; delete body.visit_type; }
-
-      const r = await api(`/leads/${modal.lead.id}/convert`, { method: 'POST', body });
+      const r = await api(`/leads/${sheet.lead.id}/convert`, { method: 'POST', body });
       let info = '✓ Konwersja udana.';
       if (r.profile_id) info += `\n→ Konto utworzone (id ${r.profile_id}), hasło tymczasowe wysłano na email.`;
       if (r.visit_id) info += `\n→ Wizyta umówiona (id ${r.visit_id}).`;
       alert(info);
-      setModal(null);
+      setSheet(null);
       setConvertForm({ create_account: true, apartment_id: '', schedule_visit: false, visit_when: '', visit_type: 'kontrola' });
       load();
     } catch (e) { alert(e.message); }
     finally { setBusy(false); }
   }
 
+  const counts = useMemo(() => Object.keys(STATUS).reduce((acc, k) => { acc[k] = leads.filter(l => l.status === k).length; return acc; }, {}), [leads]);
   const filtered = filter === 'all' ? leads : leads.filter(l => l.status === filter);
-  const counts = Object.fromEntries(Object.keys(STATUS_LABEL).map(k => [k, leads.filter(l => l.status === k).length]));
+  const filters = [
+    { value: null, label: 'Wszystkie', count: leads.length },
+    ...Object.entries(STATUS).map(([k, s]) => ({ value: k, label: s.label, count: counts[k] || 0 })),
+  ];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Leady ze strony</h1>
-        <p className="text-slate-500 text-sm">Zapytania od potencjalnych klientów. Możesz odpowiedzieć, umówić wizytę lub przekonwertować na klienta.</p>
+    <div className="panel-page">
+      <MobilePageHeader title="Leady ze strony" subtitle="Zapytania od klientów" />
+
+      {msg && (
+        <div className="mobile-card bg-emerald-50 border-emerald-200 text-emerald-800 text-sm">
+          {msg}
+        </div>
+      )}
+
+      <FilterBar
+        filters={filters}
+        value={filter === 'all' ? null : filter}
+        onChange={(v) => v ? setParams({ status: v }) : setParams({})}
+      />
+
+      <div className="mobile-stack">
+        {filtered.length === 0 ? (
+          <EmptyState icon={UserPlus2} title="Brak zapytań" body="Zapytania ze strony www trafią tutaj." />
+        ) : (
+          filtered.map(l => (
+            <article key={l.id} className="mobile-card">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-900">{l.full_name}</div>
+                  {l.email && <div className="text-xs text-slate-500 truncate">{l.email}</div>}
+                  <a href={`tel:${l.phone}`} className="text-sm text-orange-600 font-semibold">{l.phone}</a>
+                </div>
+                <span className={`chip ${STATUS[l.status]?.cls} flex-shrink-0`}>{STATUS[l.status]?.label}</span>
+              </div>
+              {l.service_type && <div className="text-xs mt-2"><strong>Usługa:</strong> {l.service_type}</div>}
+              {l.message && <p className="text-sm text-slate-700 mt-2 line-clamp-3">{l.message}</p>}
+              <div className="text-xs text-slate-400 mt-2">{fmtDateTime(l.created_at)}</div>
+
+              <div className="flex gap-2 mt-3 flex-wrap">
+                <a href={`tel:${l.phone}`} className="btn-secondary flex-1">
+                  <Phone className="w-4 h-4 text-orange-500" />
+                  Zadzwoń
+                </a>
+                <button onClick={() => { setContactForm({ channel: l.email ? 'email' : 'sms', body: '' }); setSheet({ type: 'contact', lead: l }); }}
+                  className="btn-secondary flex-1">
+                  <MessageSquare className="w-4 h-4" />
+                  Odpowiedz
+                </button>
+                {l.status !== 'converted' && (
+                  <button onClick={() => setSheet({ type: 'convert', lead: l })} className="btn-primary flex-1">
+                    <UserPlus className="w-4 h-4" />
+                    Konwertuj
+                  </button>
+                )}
+              </div>
+
+              <details className="mt-3">
+                <summary className="text-xs text-slate-500 cursor-pointer">Zmień status</summary>
+                <select value={l.status} onChange={e => update(l.id, e.target.value)}
+                  className="form-input mt-2">
+                  {Object.entries(STATUS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
+                </select>
+              </details>
+            </article>
+          ))
+        )}
       </div>
 
-      {msg && <div className="bg-emerald-50 border border-emerald-200 rounded p-3 text-sm text-emerald-800">{msg}</div>}
-
-      <div className="flex gap-2 flex-wrap">
-        {['all', ...Object.keys(STATUS_LABEL)].map(s => (
-          <button key={s} onClick={() => setFilter(s)}
-            className={`px-3 py-1.5 text-sm rounded-md ${filter === s ? 'bg-slate-900 text-white' : 'bg-white border'}`}>
-            {s === 'all' ? `Wszystkie (${leads.length})` : `${STATUS_LABEL[s]} (${counts[s] || 0})`}
+      {/* Contact sheet */}
+      <BottomSheet
+        open={sheet?.type === 'contact'}
+        onClose={() => setSheet(null)}
+        title={sheet?.lead ? `Odpowiedz: ${sheet.lead.full_name}` : ''}
+        footer={
+          <button disabled={busy || !contactForm.body} onClick={sendContact} className="btn-primary w-full py-3.5">
+            <Send className="w-5 h-5" /> Wyślij
           </button>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="overflow-x-auto w-full pb-2"><table className="w-full text-sm whitespace-nowrap min-w-[600px]">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
-            <tr>
-              <th className="text-left p-3">Klient</th>
-              <th className="text-left p-3">Kontakt</th>
-              <th className="text-left p-3">Usługa</th>
-              <th className="text-left p-3">Wiadomość</th>
-              <th className="text-left p-3">Data</th>
-              <th className="text-left p-3">Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filtered.map(l => (
-              <tr key={l.id} className="hover:bg-slate-50">
-                <td className="p-3">
-                  <div className="font-medium">{l.full_name}</div>
-                  {l.email && <div className="text-xs text-slate-500">{l.email}</div>}
-                </td>
-                <td className="p-3"><a href={`tel:${l.phone}`} className="text-orange-600 hover:underline">{l.phone}</a></td>
-                <td className="p-3">{l.service_type || '—'}</td>
-                <td className="p-3 text-slate-500 text-sm max-w-xs">{l.message || '—'}</td>
-                <td className="p-3 text-xs text-slate-500">{fmtDateTime(l.created_at)}</td>
-                <td className="p-3">
-                  <select value={l.status} onChange={e => update(l.id, e.target.value)}
-                    className={`text-xs px-2 py-1 rounded border-0 ${STATUS_BADGE[l.status]}`}>
-                    {Object.entries(STATUS_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
-                  </select>
-                </td>
-                <td className="p-3 text-right whitespace-nowrap">
-                  <button onClick={() => { setContactForm({ channel: l.email ? 'email' : 'sms', body: '' }); setModal({ type: 'contact', lead: l }); }}
-                    className="text-blue-600 text-sm hover:underline mr-2">Odpowiedz</button>
-                  {l.status !== 'converted' && (
-                    <button onClick={() => setModal({ type: 'convert', lead: l })}
-                      className="text-orange-600 text-sm hover:underline">Konwertuj</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan="7" className="p-10 text-center text-slate-400">Brak zapytań.</td></tr>}
-          </tbody>
-        </table></div>
-      </div>
-
-      {/* CONTACT MODAL */}
-      {modal?.type === 'contact' && (
-        <Modal onClose={() => setModal(null)}>
+        }
+      >
+        {sheet?.lead && (
           <div className="space-y-3">
-            <h3 className="font-semibold text-lg">Odpowiedz: {modal.lead.full_name}</h3>
-            <div className="text-sm bg-slate-50 rounded p-2">
-              📧 {modal.lead.email || '—'} • 📞 {modal.lead.phone}
+            <div className="text-xs bg-slate-50 rounded-xl p-3">
+              📧 {sheet.lead.email || '—'} • 📞 {sheet.lead.phone}
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {['email', 'sms'].map(c => (
                 <button key={c} type="button" onClick={() => setContactForm(f => ({ ...f, channel: c }))}
-                  className={`px-3 py-1.5 text-sm rounded border-2 ${contactForm.channel === c ? 'border-orange-500 bg-orange-50' : 'border-slate-200'}`}>
-                  {c === 'email' ? '📧 Email' : '💬 SMS'}
+                  className={`p-3 rounded-xl border-2 font-semibold text-sm ${contactForm.channel === c ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-200'}`}>
+                  {c === 'email' ? 'Email' : 'SMS'}
                 </button>
               ))}
             </div>
-            <textarea className="w-full border rounded p-2 text-sm" rows="5"
-              placeholder="Treść wiadomości..."
+            <textarea className="form-input resize-none" rows="5"
+              placeholder="Treść wiadomości…"
               value={contactForm.body} onChange={e => setContactForm(f => ({ ...f, body: e.target.value }))} />
-            <button disabled={busy || !contactForm.body} onClick={sendContact}
-              className="w-full bg-orange-500 text-white py-2 rounded disabled:opacity-50">
-              {busy ? '...' : 'Wyślij wiadomość'}
-            </button>
           </div>
-        </Modal>
-      )}
+        )}
+      </BottomSheet>
 
-      {/* CONVERT MODAL */}
-      {modal?.type === 'convert' && (
-        <Modal onClose={() => setModal(null)}>
+      {/* Convert sheet */}
+      <BottomSheet
+        open={sheet?.type === 'convert'}
+        onClose={() => setSheet(null)}
+        title={sheet?.lead ? `Konwertuj: ${sheet.lead.full_name}` : ''}
+        footer={
+          <button disabled={busy} onClick={convert} className="btn-primary w-full py-3.5">
+            <ArrowRight className="w-5 h-5" /> Konwertuj
+          </button>
+        }
+      >
+        {sheet?.lead && (
           <div className="space-y-3">
-            <h3 className="font-semibold text-lg">Konwertuj leada: {modal.lead.full_name}</h3>
-            <div className="text-sm bg-slate-50 rounded p-2">
-              📧 {modal.lead.email || '— brak —'} • 📞 {modal.lead.phone}
+            <div className="text-xs bg-slate-50 rounded-xl p-3">
+              📧 {sheet.lead.email || '—'} • 📞 {sheet.lead.phone}
             </div>
 
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={convertForm.create_account}
+            <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 cursor-pointer">
+              <input type="checkbox" className="w-5 h-5 accent-orange-500"
+                checked={convertForm.create_account}
                 onChange={e => setConvertForm(f => ({ ...f, create_account: e.target.checked }))} />
-              Utwórz konto mieszkańca (wymaga email — hasło tymczasowe zostanie wysłane)
+              <span className="text-sm">Utwórz konto (wymaga email — hasło tymczasowe na email)</span>
             </label>
 
             <SelectOrCreate
@@ -190,7 +206,7 @@ export default function Leady() {
               options={apartments.filter(a => !a.resident_id)}
               getLabel={a => `${a.building_address}, m. ${a.number}`}
               emptyLabel="— bez mieszkania —"
-              helpText="Pokazuję tylko niezasiedlone. Jeśli klient ma nowy adres — dodaj budynek i mieszkanie."
+              helpText="Pokazuję tylko niezasiedlone."
               createTitle="Nowy budynek + mieszkanie"
               createFields={[
                 ...buildingFields,
@@ -206,17 +222,18 @@ export default function Leady() {
               }}
             />
 
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={convertForm.schedule_visit}
+            <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 cursor-pointer">
+              <input type="checkbox" className="w-5 h-5 accent-orange-500"
+                checked={convertForm.schedule_visit}
                 onChange={e => setConvertForm(f => ({ ...f, schedule_visit: e.target.checked }))} />
-              Umów pierwszą wizytę
+              <span className="text-sm">Umów pierwszą wizytę</span>
             </label>
 
             {convertForm.schedule_visit && (
-              <div className="ml-6 space-y-2 border-l-2 border-orange-300 pl-3">
-                <input className="w-full border rounded p-2 text-sm" type="datetime-local" required={convertForm.schedule_visit}
+              <div className="space-y-2 pl-2 border-l-2 border-orange-300">
+                <input className="form-input" type="datetime-local" required={convertForm.schedule_visit}
                   value={convertForm.visit_when} onChange={e => setConvertForm(f => ({ ...f, visit_when: e.target.value }))} />
-                <select className="w-full border rounded p-2 text-sm" value={convertForm.visit_type}
+                <select className="form-input" value={convertForm.visit_type}
                   onChange={e => setConvertForm(f => ({ ...f, visit_type: e.target.value }))}>
                   <option value="kontrola">Kontrola okresowa</option>
                   <option value="czyszczenie">Czyszczenie</option>
@@ -226,25 +243,9 @@ export default function Leady() {
                 {!convertForm.apartment_id && <div className="text-xs text-rose-600">Wybierz mieszkanie żeby umówić wizytę.</div>}
               </div>
             )}
-
-            <button disabled={busy} onClick={convert}
-              className="w-full bg-orange-500 text-white py-2 rounded font-medium disabled:opacity-50">
-              {busy ? '...' : 'Konwertuj leada'}
-            </button>
           </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function Modal({ children, onClose }) {
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-auto">
-        <button onClick={onClose} className="float-right text-slate-400">✕</button>
-        {children}
-      </div>
+        )}
+      </BottomSheet>
     </div>
   );
 }

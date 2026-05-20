@@ -1,18 +1,28 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { Edit3, CheckCircle2, XCircle, Ban, MapPin, Phone, ClipboardCheck, FileText, AlertTriangle } from 'lucide-react';
 import { api } from '../../lib/api';
-import { fmtDateTime, visitTypeLabel, statusColor, statusLabel } from '../../lib/format';
+import { fmtDateTime, visitTypeLabel } from '../../lib/format';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import StatusBadge from '../../components/mobile/StatusBadge';
+import BottomSheet from '../../components/mobile/BottomSheet';
+import Spinner from '../../components/mobile/Spinner';
 
 const TYPES = ['kontrola', 'czyszczenie', 'inspekcja_kamera', 'montaz_wkladu', 'montaz_nasady', 'kontrola_gaz', 'opinia'];
+const RESULTS = [
+  { v: 'sprawny', label: 'Sprawny', color: 'emerald', icon: CheckCircle2 },
+  { v: 'nieszczelny', label: 'Nieszczelny', color: 'amber', icon: AlertTriangle },
+  { v: 'niesprawny', label: 'Niesprawny', color: 'rose', icon: XCircle },
+];
 
 export default function WizytaDetail() {
   const { id } = useParams();
-  const nav = useNavigate();
   const [visit, setVisit] = useState(null);
   const [protocol, setProtocol] = useState(null);
-  const [form, setForm] = useState({ result: 'sprawny', findings: '', recommendations: '' });
+  const [protoForm, setProtoForm] = useState({ result: 'sprawny', findings: '', recommendations: '' });
   const [busy, setBusy] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [editSheet, setEditSheet] = useState(false);
+  const [protocolSheet, setProtocolSheet] = useState(false);
   const [edit, setEdit] = useState({ scheduled_at: '', type: '', notes: '', duration_min: 60 });
 
   async function load() {
@@ -24,7 +34,7 @@ export default function WizytaDetail() {
         type: v.type, notes: v.notes || '', duration_min: v.duration_min || 60,
       });
       if (v?.status === 'zakonczona') {
-        try { setProtocol(await api(`/protocols/visit/${id}`)); } catch {}
+        try { setProtocol(await api(`/protocols/visit/${id}`)); } catch { /* no protocol */ }
       }
     } catch (e) { console.error(e); }
   }
@@ -32,8 +42,9 @@ export default function WizytaDetail() {
 
   async function complete() {
     setBusy(true);
-    await api(`/visits/${id}/complete`, { method: 'POST', body: form });
+    await api(`/visits/${id}/complete`, { method: 'POST', body: protoForm });
     setBusy(false);
+    setProtocolSheet(false);
     load();
   }
   async function refused() {
@@ -54,104 +65,221 @@ export default function WizytaDetail() {
       if (body.scheduled_at) body.scheduled_at = new Date(body.scheduled_at).toISOString();
       body.duration_min = Number(body.duration_min);
       await api(`/visits/${id}`, { method: 'PATCH', body });
-      setEditMode(false);
+      setEditSheet(false);
       load();
     } finally { setBusy(false); }
   }
 
-  if (!visit) return <div>Ładowanie...</div>;
+  if (!visit) return (
+    <div className="panel-page">
+      <MobilePageHeader title="Wizyta" back="/panel/kominiarz/wizyty" />
+      <Spinner />
+    </div>
+  );
+
+  const canComplete = visit.status === 'umowiona';
 
   return (
-    <div className="space-y-6">
-      <Link to="/panel/kominiarz/wizyty" className="text-sm text-slate-500">← Wszystkie wizyty</Link>
+    <div className="panel-page">
+      <MobilePageHeader title={visitTypeLabel[visit.type] || visit.type} back="/panel/kominiarz/wizyty" />
 
-      <div className="bg-white rounded-xl border p-6">
-        <div className="flex items-start justify-between">
+      <section className="mobile-card">
+        <div className="flex items-start justify-between gap-2 mb-2">
           <div>
-            <h1 className="text-2xl font-bold">{visit.building_address}{visit.apt_number && ` / m. ${visit.apt_number}`}</h1>
-            <div className="text-slate-500">{visitTypeLabel[visit.type] || visit.type} • {fmtDateTime(visit.scheduled_at)}</div>
-            {visit.duration_min && <div className="text-xs text-slate-400">Czas: {visit.duration_min} min</div>}
+            <div className="text-xs uppercase text-slate-500 tracking-wide font-semibold">Termin</div>
+            <div className="font-bold text-lg text-slate-900">{fmtDateTime(visit.scheduled_at)}</div>
+            <div className="text-xs text-slate-400">{visit.duration_min || 60} min</div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-xs px-3 py-1 rounded ${statusColor[visit.status]}`}>{statusLabel[visit.status]}</span>
-            {visit.status === 'umowiona' && !editMode && (
-              <button onClick={() => setEditMode(true)} className="text-sm text-orange-600 hover:underline">Edytuj</button>
+          <StatusBadge status={visit.status} />
+        </div>
+        <div className="text-sm text-slate-600 flex items-center gap-1.5">
+          <MapPin className="w-4 h-4 text-slate-400" />
+          {visit.building_address}{visit.apt_number ? `, m. ${visit.apt_number}` : ''}
+        </div>
+        {visit.notes && (
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-slate-800">
+            {visit.notes}
+          </div>
+        )}
+        {visit.status === 'umowiona' && (
+          <button onClick={() => setEditSheet(true)} className="btn-ghost text-orange-600 mt-3 -ml-2">
+            <Edit3 className="w-4 h-4" /> Edytuj termin / typ
+          </button>
+        )}
+      </section>
+
+      {visit.resident_name && (
+        <section className="mobile-card">
+          <div className="text-xs uppercase text-slate-500 tracking-wide font-semibold mb-2">Mieszkaniec</div>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-bold">
+              {visit.resident_name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-slate-900 truncate">{visit.resident_name}</div>
+              {visit.resident_email && <div className="text-xs text-slate-500 truncate">{visit.resident_email}</div>}
+            </div>
+            {visit.resident_phone && (
+              <a href={`tel:${visit.resident_phone}`} className="btn-primary py-2.5 px-4">
+                <Phone className="w-4 h-4" />
+                Zadzwoń
+              </a>
             )}
           </div>
-        </div>
-        {visit.notes && !editMode && <div className="mt-4 p-3 bg-slate-50 rounded text-sm">{visit.notes}</div>}
-
-        {editMode && (
-          <form onSubmit={saveEdit} className="mt-4 pt-4 border-t space-y-3">
-            <h3 className="font-semibold text-sm">Edycja wizyty</h3>
-            <input className="w-full border rounded p-2 text-sm" type="datetime-local" required
-              value={edit.scheduled_at} onChange={e => setEdit(s => ({ ...s, scheduled_at: e.target.value }))} />
-            <div className="grid grid-cols-2 gap-2">
-              <select className="border rounded p-2 text-sm" value={edit.type}
-                onChange={e => setEdit(s => ({ ...s, type: e.target.value }))}>
-                {TYPES.map(t => <option key={t} value={t}>{visitTypeLabel[t]}</option>)}
-              </select>
-              <input className="border rounded p-2 text-sm" type="number" min="15" step="15"
-                value={edit.duration_min} onChange={e => setEdit(s => ({ ...s, duration_min: e.target.value }))} />
-            </div>
-            <textarea className="w-full border rounded p-2 text-sm" rows="2" placeholder="Uwagi"
-              value={edit.notes} onChange={e => setEdit(s => ({ ...s, notes: e.target.value }))} />
-            <div className="flex gap-2">
-              <button disabled={busy} className="px-4 py-2 bg-orange-500 text-white rounded text-sm">{busy ? '...' : 'Zapisz'}</button>
-              <button type="button" onClick={() => setEditMode(false)} className="px-4 py-2 border rounded text-sm">Anuluj</button>
-            </div>
-          </form>
-        )}
-      </div>
-
-      {visit.status === 'umowiona' && !editMode && (
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <h2 className="font-semibold text-lg">Zakończ wizytę — protokół</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {['sprawny', 'nieszczelny', 'niesprawny'].map(r => (
-              <button key={r} type="button" onClick={() => setForm(f => ({ ...f, result: r }))}
-                className={`p-3 rounded-md border-2 ${form.result === r
-                  ? r === 'sprawny' ? 'border-emerald-500 bg-emerald-50' : r === 'nieszczelny' ? 'border-amber-500 bg-amber-50' : 'border-rose-500 bg-rose-50'
-                  : 'border-slate-200'}`}>
-                {r === 'sprawny' ? '✓ Sprawny' : r === 'nieszczelny' ? '⚠ Nieszczelny' : '✗ Niesprawny'}
-              </button>
-            ))}
-          </div>
-          <textarea className="w-full border rounded-md p-2 text-sm" rows="3" placeholder="Wykryte usterki (jeśli są)..."
-            value={form.findings} onChange={e => setForm(f => ({ ...f, findings: e.target.value }))} />
-          <textarea className="w-full border rounded-md p-2 text-sm" rows="2" placeholder="Zalecenia..."
-            value={form.recommendations} onChange={e => setForm(f => ({ ...f, recommendations: e.target.value }))} />
-          <div className="flex gap-3 flex-wrap">
-            <button disabled={busy} onClick={complete}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-medium disabled:opacity-50">
-              {busy ? '...' : 'Zatwierdź protokół'}
-            </button>
-            <button onClick={refused} className="px-4 py-2 border-2 border-rose-500 text-rose-600 rounded-md hover:bg-rose-50">
-              Odmowa wpuszczenia
-            </button>
-            <button onClick={cancel} className="px-4 py-2 border-2 border-slate-300 text-slate-600 rounded-md hover:bg-slate-50">
-              Anuluj wizytę
-            </button>
-          </div>
-          {(form.result === 'nieszczelny' || form.result === 'niesprawny') && (
-            <div className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded p-3">
-              💡 Po zatwierdzeniu protokołu z usterką system automatycznie wygeneruje ofertę upsell dla mieszkańca.
-            </div>
-          )}
-        </div>
+        </section>
       )}
 
       {protocol && (
-        <div className="bg-white rounded-xl border p-6">
-          <h2 className="font-semibold text-lg mb-3">Protokół</h2>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><span className="text-slate-500">Wynik:</span> <strong>{protocol.result}</strong></div>
-            <div><span className="text-slate-500">Podpisał:</span> {protocol.signed_by}</div>
-            <div className="col-span-2"><span className="text-slate-500">Usterki:</span> {protocol.findings || '—'}</div>
-            <div className="col-span-2"><span className="text-slate-500">Zalecenia:</span> {protocol.recommendations || '—'}</div>
+        <section className="mobile-card">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText className="w-4 h-4 text-emerald-600" />
+            <div className="font-semibold text-slate-900">Protokół</div>
+          </div>
+          <div className="space-y-2 text-sm">
+            <Row label="Wynik">
+              <strong className={
+                protocol.result === 'sprawny' ? 'text-emerald-600' :
+                protocol.result === 'nieszczelny' ? 'text-amber-600' : 'text-rose-600'
+              }>{protocol.result.toUpperCase()}</strong>
+            </Row>
+            <Row label="Podpisał">{protocol.signed_by}</Row>
+            {protocol.findings && <Row label="Usterki">{protocol.findings}</Row>}
+            {protocol.recommendations && <Row label="Zalecenia">{protocol.recommendations}</Row>}
+          </div>
+        </section>
+      )}
+
+      {canComplete && (
+        <div className="sticky-cta">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 grid grid-cols-3 gap-2">
+            <button onClick={() => setProtocolSheet(true)} disabled={busy} className="btn-primary py-3 col-span-3">
+              <ClipboardCheck className="w-5 h-5" />
+              Zakończ wizytę
+            </button>
+            <button onClick={refused} disabled={busy} className="btn-secondary py-2.5 text-xs col-span-1">
+              <Ban className="w-3.5 h-3.5" />
+              Odmowa
+            </button>
+            <button onClick={cancel} disabled={busy} className="btn-secondary py-2.5 text-xs col-span-2 text-rose-600">
+              <XCircle className="w-3.5 h-3.5" />
+              Anuluj wizytę
+            </button>
           </div>
         </div>
       )}
+
+      {/* Edit sheet */}
+      <BottomSheet
+        open={editSheet}
+        onClose={() => setEditSheet(false)}
+        title="Edycja wizyty"
+        footer={
+          <button form="edit-visit-form" type="submit" disabled={busy} className="btn-primary w-full py-3.5">
+            {busy ? '…' : 'Zapisz'}
+          </button>
+        }
+      >
+        <form id="edit-visit-form" onSubmit={saveEdit} className="space-y-3">
+          <div>
+            <label className="form-label">Termin</label>
+            <input className="form-input" type="datetime-local" required
+              value={edit.scheduled_at} onChange={e => setEdit(s => ({ ...s, scheduled_at: e.target.value }))} />
+          </div>
+          <div>
+            <label className="form-label">Rodzaj</label>
+            <select className="form-input" value={edit.type}
+              onChange={e => setEdit(s => ({ ...s, type: e.target.value }))}>
+              {TYPES.map(t => <option key={t} value={t}>{visitTypeLabel[t]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Czas (min)</label>
+            <input className="form-input" type="number" min="15" step="15" inputMode="numeric"
+              value={edit.duration_min} onChange={e => setEdit(s => ({ ...s, duration_min: e.target.value }))} />
+          </div>
+          <div>
+            <label className="form-label">Uwagi</label>
+            <textarea className="form-input resize-none" rows="3"
+              value={edit.notes} onChange={e => setEdit(s => ({ ...s, notes: e.target.value }))} />
+          </div>
+        </form>
+      </BottomSheet>
+
+      {/* Protocol sheet */}
+      <BottomSheet
+        open={protocolSheet}
+        onClose={() => setProtocolSheet(false)}
+        title="Protokół wizyty"
+        footer={
+          <button onClick={complete} disabled={busy} className="btn-primary w-full py-3.5 bg-emerald-600 hover:bg-emerald-700">
+            {busy ? '…' : 'Zatwierdź protokół'}
+          </button>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <span className="form-label">Wynik kontroli</span>
+            <div className="grid grid-cols-1 gap-2">
+              {RESULTS.map(r => {
+                const Ico = r.icon;
+                const active = protoForm.result === r.v;
+                const colorMap = {
+                  emerald: active ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200',
+                  amber: active ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200',
+                  rose: active ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200',
+                };
+                return (
+                  <button
+                    key={r.v}
+                    type="button"
+                    onClick={() => setProtoForm(f => ({ ...f, result: r.v }))}
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left font-semibold ${colorMap[r.color]}`}
+                  >
+                    <Ico className={`w-5 h-5 text-${r.color}-600`} />
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <label htmlFor="findings" className="form-label">Wykryte usterki</label>
+            <textarea
+              id="findings"
+              className="form-input resize-none"
+              rows="3"
+              placeholder="np. nieszczelność w przewodzie spalinowym…"
+              value={protoForm.findings}
+              onChange={e => setProtoForm(f => ({ ...f, findings: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label htmlFor="recommendations" className="form-label">Zalecenia</label>
+            <textarea
+              id="recommendations"
+              className="form-input resize-none"
+              rows="3"
+              placeholder="np. montaż wkładu stalowego…"
+              value={protoForm.recommendations}
+              onChange={e => setProtoForm(f => ({ ...f, recommendations: e.target.value }))}
+            />
+          </div>
+          {(protoForm.result === 'nieszczelny' || protoForm.result === 'niesprawny') && (
+            <div className="text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900">
+              💡 Po zatwierdzeniu system automatycznie wygeneruje ofertę upsell dla mieszkańca.
+            </div>
+          )}
+        </div>
+      </BottomSheet>
+    </div>
+  );
+}
+
+function Row({ label, children }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-slate-500 w-24 flex-shrink-0">{label}:</span>
+      <span className="flex-1 text-slate-800">{children}</span>
     </div>
   );
 }

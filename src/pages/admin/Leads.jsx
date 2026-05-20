@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Phone, Mail, UserPlus2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fmtDateTime } from '../../lib/format';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import FilterBar from '../../components/mobile/FilterBar';
+import EmptyState from '../../components/mobile/EmptyState';
 
-const STATUS_BADGE = {
-  new: 'bg-blue-100 text-blue-700',
-  contacted: 'bg-amber-100 text-amber-700',
-  scheduled: 'bg-emerald-100 text-emerald-700',
-  converted: 'bg-emerald-200 text-emerald-800',
-  rejected: 'bg-slate-100 text-slate-500',
+const STATUS = {
+  new: { label: 'Nowy', cls: 'bg-blue-100 text-blue-700' },
+  contacted: { label: 'Kontakt', cls: 'bg-amber-100 text-amber-700' },
+  scheduled: { label: 'Umówiony', cls: 'bg-emerald-100 text-emerald-700' },
+  converted: { label: 'Klient', cls: 'bg-emerald-200 text-emerald-800' },
+  rejected: { label: 'Odrzucony', cls: 'bg-slate-100 text-slate-500' },
 };
-const STATUS_LABEL = { new: 'Nowy', contacted: 'Kontakt', scheduled: 'Umówiony', converted: 'Klient', rejected: 'Odrzucony' };
 
 export default function AdminLeads() {
   const [leads, setLeads] = useState([]);
@@ -24,86 +27,59 @@ export default function AdminLeads() {
     await api(`/leads/${id}`, { method: 'PATCH', body: fields });
     load();
   }
-  function setFilter(s) {
-    const n = new URLSearchParams(params);
-    if (s === 'all') n.delete('status'); else n.set('status', s);
-    setParams(n);
-  }
 
   const filtered = filter === 'all' ? leads : leads.filter(l => l.status === filter);
-  const stats = {
-    new: leads.filter(l => l.status === 'new').length,
-    contacted: leads.filter(l => l.status === 'contacted').length,
-    converted: leads.filter(l => l.status === 'converted').length,
-    total: leads.length,
-  };
-  const conv = stats.total ? Math.round((stats.converted / stats.total) * 100) : 0;
+  const counts = useMemo(() => Object.keys(STATUS).reduce((acc, k) => { acc[k] = leads.filter(l => l.status === k).length; return acc; }, {}), [leads]);
+  const conv = leads.length ? Math.round(((counts.converted || 0) / leads.length) * 100) : 0;
+  const filters = [
+    { value: null, label: 'Wszystkie', count: leads.length },
+    ...Object.entries(STATUS).map(([k, s]) => ({ value: k, label: s.label, count: counts[k] || 0 })),
+  ];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Leady</h1>
-        <p className="text-slate-500 text-sm">Zapytania ze strony głównej.</p>
-      </div>
+    <div className="panel-page">
+      <MobilePageHeader title="Leady" subtitle={`Konwersja: ${conv}%`} />
 
-      <div className="grid grid-cols-4 gap-3">
-        <Stat label="Nowe" value={stats.new} tone="blue" onClick={() => setFilter('new')} />
-        <Stat label="W kontakcie" value={stats.contacted} tone="amber" onClick={() => setFilter('contacted')} />
-        <Stat label="Skonwertowane" value={stats.converted} tone="emerald" onClick={() => setFilter('converted')} />
-        <Stat label="Konwersja" value={`${conv}%`} />
-      </div>
+      <FilterBar
+        filters={filters}
+        value={filter === 'all' ? null : filter}
+        onChange={(v) => v ? setParams({ status: v }) : setParams({})}
+      />
 
-      <div className="flex gap-2 flex-wrap">
-        {['all', ...Object.keys(STATUS_LABEL)].map(s => (
-          <button key={s} onClick={() => setFilter(s)}
-            className={`px-3 py-1.5 text-sm rounded-md ${filter === s ? 'bg-slate-900 text-white' : 'bg-white border'}`}>
-            {s === 'all' ? `Wszystkie (${leads.length})` : STATUS_LABEL[s]}
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="overflow-x-auto w-full pb-2"><table className="w-full text-sm whitespace-nowrap min-w-[600px]">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
-            <tr>
-              <th className="text-left p-3">Klient</th>
-              <th className="text-left p-3">Kontakt</th>
-              <th className="text-left p-3">Usługa</th>
-              <th className="text-left p-3">Wiadomość</th>
-              <th className="text-left p-3">Data</th>
-              <th className="text-left p-3">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filtered.map(l => (
-              <tr key={l.id} className="hover:bg-slate-50">
-                <td className="p-3 font-medium">{l.full_name}</td>
-                <td className="p-3 text-sm">
-                  <div><a href={`tel:${l.phone}`} className="text-orange-600 hover:underline">{l.phone}</a></div>
-                  {l.email && <div className="text-slate-500"><a href={`mailto:${l.email}`}>{l.email}</a></div>}
-                </td>
-                <td className="p-3 text-slate-600">{l.service_type || '—'}</td>
-                <td className="p-3 text-slate-500 text-sm max-w-xs">{l.message || '—'}</td>
-                <td className="p-3 text-slate-500 text-xs">{fmtDateTime(l.created_at)}</td>
-                <td className="p-3">
-                  <select value={l.status} onChange={e => update(l.id, { status: e.target.value })}
-                    className={`text-xs px-2 py-1 rounded border-0 ${STATUS_BADGE[l.status]}`}>
-                    {Object.entries(STATUS_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
-                  </select>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan="6" className="p-10 text-center text-slate-400">Brak leadów.</td></tr>}
-          </tbody>
-        </table></div>
+      <div className="mobile-stack">
+        {filtered.length === 0 ? (
+          <EmptyState icon={UserPlus2} title="Brak zapytań" />
+        ) : (
+          filtered.map(l => (
+            <article key={l.id} className="mobile-card">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-900">{l.full_name}</div>
+                  {l.email && <div className="text-xs text-slate-500 truncate">{l.email}</div>}
+                  <div className="text-xs text-slate-500">{l.phone}</div>
+                </div>
+                <select value={l.status} onChange={e => update(l.id, { status: e.target.value })}
+                  className={`chip ${STATUS[l.status]?.cls} px-2 py-1 border-0 outline-0`}>
+                  {Object.entries(STATUS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
+                </select>
+              </div>
+              {l.service_type && <div className="text-xs mt-1"><strong>Usługa:</strong> {l.service_type}</div>}
+              {l.message && <p className="text-sm text-slate-700 mt-2 line-clamp-3">{l.message}</p>}
+              <div className="text-xs text-slate-400 mt-2">{fmtDateTime(l.created_at)}</div>
+              <div className="flex gap-2 mt-3">
+                <a href={`tel:${l.phone}`} className="btn-secondary flex-1">
+                  <Phone className="w-4 h-4 text-orange-500" /> Zadzwoń
+                </a>
+                {l.email && (
+                  <a href={`mailto:${l.email}`} className="btn-secondary flex-1">
+                    <Mail className="w-4 h-4" /> Email
+                  </a>
+                )}
+              </div>
+            </article>
+          ))
+        )}
       </div>
     </div>
   );
-}
-function Stat({ label, value, tone = 'slate', onClick }) {
-  const c = { slate: 'bg-white', blue: 'bg-blue-50 border-blue-200', amber: 'bg-amber-50 border-amber-200', emerald: 'bg-emerald-50 border-emerald-200' }[tone];
-  return <button onClick={onClick} className={`rounded-xl border p-4 text-left ${c} ${onClick ? 'hover:shadow-md cursor-pointer' : 'cursor-default'}`}>
-    <div className="text-xs uppercase text-slate-500">{label}</div>
-    <div className="text-2xl font-bold mt-1">{value}</div>
-  </button>;
 }

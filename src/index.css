@@ -7,14 +7,26 @@
   --color-background: #ffffff;
   --color-surface: #f1f5f9;
   --font-sans: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+  /* Mobile-first design tokens */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --bottom-nav-h: 64px;
+  --mobile-header-h: 56px;
+  --tap-min: 44px;
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply font-sans bg-background text-slate-900;
+    overscroll-behavior-y: none;
   }
 
   /* WCAG: widoczny pierścień focus dla nawigacji klawiaturą */
@@ -23,23 +35,185 @@
     outline-offset: 2px;
     border-radius: 4px;
   }
-  /* Standardowe :focus bez klawiatury — dyskretne */
   *:focus:not(:focus-visible) {
     outline: none;
   }
 
-  /* WCAG: tap target min. 44px na mobile */
+  /* WCAG / Apple HIG / Material — tap target min. 44px na mobile */
   button, a[role="button"], [type="submit"], [type="button"] {
-    min-height: 32px;
+    min-height: var(--tap-min);
+    touch-action: manipulation;
+  }
+  /* Inputy mobile — 16px zapobiega zoom na iOS Safari */
+  input, select, textarea {
+    font-size: 16px;
+  }
+  @media (min-width: 768px) {
+    input, select, textarea {
+      font-size: 14px;
+    }
   }
 
-  /* Hierarchia nagłówków */
   h1 { line-height: 1.2; }
   h2 { line-height: 1.25; }
   h3 { line-height: 1.3; }
 }
 
-/* Skip-to-content link (WCAG 2.4.1 Bypass Blocks) */
+@layer components {
+  /* ============= Mobile design system utilities ============= */
+
+  .mobile-card {
+    @apply bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-5;
+  }
+
+  .mobile-stack {
+    @apply space-y-3 md:space-y-4;
+  }
+
+  /* Sticky bottom CTA — nad bottom-nav */
+  .sticky-cta {
+    position: sticky;
+    bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.5rem);
+    z-index: 30;
+  }
+
+  /* Bottom-nav bar */
+  .bottom-nav {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 40;
+    background: white;
+    border-top: 1px solid #e2e8f0;
+    padding-bottom: var(--safe-bottom);
+    box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.06);
+  }
+  .bottom-nav-item {
+    @apply flex flex-col items-center justify-center gap-0.5 flex-1 text-xs font-medium text-slate-500;
+    min-height: var(--bottom-nav-h);
+    -webkit-tap-highlight-color: rgba(234, 88, 12, 0.1);
+  }
+  .bottom-nav-item.active {
+    @apply text-orange-600;
+  }
+  .bottom-nav-item:active {
+    background-color: rgba(234, 88, 12, 0.08);
+  }
+
+  /* Sticky mobile header */
+  .mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    padding-top: var(--safe-top);
+  }
+
+  /* FAB */
+  .fab {
+    position: fixed;
+    right: 1rem;
+    bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 1rem);
+    z-index: 35;
+    width: 56px;
+    height: 56px;
+    border-radius: 9999px;
+    background: #ea580c;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(234, 88, 12, 0.4);
+  }
+  .fab:active { transform: scale(0.96); }
+
+  /* Bottom sheet */
+  .sheet-backdrop {
+    @apply fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50;
+  }
+  .sheet-panel {
+    @apply fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl;
+    padding-bottom: var(--safe-bottom);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet-handle {
+    @apply mx-auto mt-2.5 mb-1 w-12 h-1.5 rounded-full bg-slate-300;
+  }
+
+  /* Chip pill — filtry */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap;
+  }
+  .chip-active {
+    @apply bg-orange-500 text-white;
+  }
+  .chip-idle {
+    @apply bg-slate-100 text-slate-700;
+  }
+
+  /* Horizontal scrollable chip row */
+  .chip-row {
+    @apply flex gap-2 overflow-x-auto -mx-4 px-4 pb-1;
+    scrollbar-width: none;
+  }
+  .chip-row::-webkit-scrollbar { display: none; }
+
+  /* Tile — duży kafelek akcji */
+  .tile {
+    @apply relative flex flex-col gap-2 p-5 rounded-2xl bg-white shadow-sm border border-slate-200;
+    min-height: 120px;
+  }
+  .tile:active { transform: scale(0.98); }
+
+  /* KPI card */
+  .kpi-card {
+    @apply rounded-2xl bg-white shadow-sm border border-slate-200 p-4;
+  }
+  .kpi-value {
+    @apply text-3xl font-bold text-slate-900 leading-none;
+  }
+  .kpi-label {
+    @apply text-xs uppercase tracking-wide text-slate-500 font-semibold mt-1;
+  }
+
+  /* Form input mobile-first */
+  .form-input {
+    @apply w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-base
+           focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all;
+  }
+  .form-label {
+    @apply block text-sm font-semibold text-slate-700 mb-1.5;
+  }
+
+  /* Buttony */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-semibold shadow-sm transition-colors;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-900 font-semibold border border-slate-200 transition-colors;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-colors;
+  }
+
+  /* Page container z paddingiem pod bottom-nav */
+  .panel-page {
+    @apply flex flex-col gap-4;
+    padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 1.5rem);
+  }
+  @media (min-width: 768px) {
+    .panel-page {
+      padding-bottom: 1.5rem;
+    }
+  }
+}
+
+/* Skip-to-content link (WCAG 2.4.1) */
 .skip-link {
   position: absolute;
   left: -9999px;
@@ -57,15 +231,17 @@
   left: 0;
 }
 
-/* Parallax */
-.parallax-bg {
-  background-attachment: fixed;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+/* Parallax tylko desktop + bez reduced-motion */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .parallax-bg {
+    background-attachment: fixed;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
 }
 
-/* WCAG 2.3.3 / 2.2.2 — respektuj prefers-reduced-motion */
+/* WCAG 2.3.3 / 2.2.2 — prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
@@ -75,7 +251,7 @@
   }
 }
 
-/* Subtelne podświetlenie kafelków usług gdy karta jest "featured" */
+/* Featured service card */
 .service-card-featured {
   position: relative;
   overflow: hidden;
@@ -91,10 +267,31 @@
   pointer-events: none;
 }
 
-/* Line-clamp utility (fallback gdy nie ma w Tailwind) */
+/* Line-clamp utility */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .line-clamp-3 {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Bottom-sheet animacja */
+@keyframes sheet-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes sheet-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sheet-panel { animation: sheet-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.sheet-backdrop { animation: sheet-fade-in 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel, .sheet-backdrop { animation: none; }
 }

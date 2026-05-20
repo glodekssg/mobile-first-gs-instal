@@ -1,64 +1,69 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import { getProfile, clearSession } from '../lib/api';
 import NotificationBell from '../components/NotificationBell';
-import { Menu, X } from 'lucide-react';
+import PanelBottomNav from '../components/mobile/PanelBottomNav';
+import {
+  LayoutDashboard, Calendar, ClipboardList, Building2, Lightbulb,
+  Tag, UserPlus, Link as LinkIcon, AlertTriangle, Settings, FileText,
+  Users, FileEdit, ScrollText, Database, Home, ClipboardCheck, Wrench,
+  Gift, History,
+} from 'lucide-react';
 
 const NAV = {
   kominiarz: [
-    { to: '/panel/kominiarz', label: 'Dashboard' },
-    { to: '/panel/kominiarz/kalendarz', label: 'Kalendarz' },
-    { to: '/panel/kominiarz/wizyty', label: 'Wizyty' },
-    { to: '/panel/kominiarz/klienci', label: 'Obiekty / Klienci' },
-    { to: '/panel/kominiarz/nba', label: 'Next Best Action' },
-    { to: '/panel/kominiarz/oferty', label: 'Oferty / Upsell' },
-    { to: '/panel/kominiarz/leady', label: 'Leady' },
-    { to: '/panel/kominiarz/zgloszenia', label: 'Zgłoszenia' },
-    { to: '/panel/kominiarz/magic-linki', label: 'Magic linki' },
-    { to: '/panel/kominiarz/ustawienia', label: 'Ustawienia' },
+    { to: '/panel/kominiarz', label: 'Dashboard', short: 'Start', icon: LayoutDashboard },
+    { to: '/panel/kominiarz/kalendarz', label: 'Kalendarz', icon: Calendar },
+    { to: '/panel/kominiarz/wizyty', label: 'Wizyty', icon: ClipboardList },
+    { to: '/panel/kominiarz/klienci', label: 'Obiekty / Klienci', short: 'Obiekty', icon: Building2 },
+    { to: '/panel/kominiarz/nba', label: 'Next Best Action', short: 'NBA', icon: Lightbulb },
+    { to: '/panel/kominiarz/oferty', label: 'Oferty / Upsell', icon: Tag },
+    { to: '/panel/kominiarz/leady', label: 'Leady', icon: UserPlus },
+    { to: '/panel/kominiarz/zgloszenia', label: 'Zgłoszenia', icon: AlertTriangle },
+    { to: '/panel/kominiarz/magic-linki', label: 'Magic linki', icon: LinkIcon },
+    { to: '/panel/kominiarz/ustawienia', label: 'Ustawienia', icon: Settings },
   ],
   zarzadca: [
-    { to: '/panel/spoldzielnia', label: 'Dashboard' },
-    { to: '/panel/spoldzielnia/obiekty', label: 'Obiekty' },
-    { to: '/panel/spoldzielnia/zgloszenia', label: 'Zgłoszenia' },
-    { to: '/panel/spoldzielnia/raporty', label: 'Raporty' },
+    { to: '/panel/spoldzielnia', label: 'Dashboard', short: 'Start', icon: LayoutDashboard },
+    { to: '/panel/spoldzielnia/obiekty', label: 'Obiekty', icon: Building2 },
+    { to: '/panel/spoldzielnia/zgloszenia', label: 'Zgłoszenia', icon: AlertTriangle },
+    { to: '/panel/spoldzielnia/raporty', label: 'Raporty', icon: FileText },
   ],
   mieszkaniec: [
-    { to: '/panel/mieszkaniec', label: 'Moje mieszkanie' },
-    { to: '/panel/mieszkaniec/termin', label: 'Umów wizytę' },
-    { to: '/panel/mieszkaniec/historia', label: 'Historia kontroli' },
-    { to: '/panel/mieszkaniec/oferty', label: 'Oferty dla mnie' },
-    { to: '/panel/mieszkaniec/zgloszenie', label: 'Zgłoś usterkę' },
+    { to: '/panel/mieszkaniec', label: 'Moje mieszkanie', short: 'Dom', icon: Home },
+    { to: '/panel/mieszkaniec/termin', label: 'Umów wizytę', short: 'Umów', icon: Calendar },
+    { to: '/panel/mieszkaniec/historia', label: 'Historia', icon: History },
+    { to: '/panel/mieszkaniec/oferty', label: 'Oferty', icon: Gift },
+    { to: '/panel/mieszkaniec/zgloszenie', label: 'Zgłoś usterkę', short: 'Zgłoś', icon: Wrench },
   ],
   admin: [
-    { to: '/panel/admin', label: 'Dashboard' },
-    { to: '/panel/admin/users', label: 'Użytkownicy' },
-    { to: '/panel/admin/dane', label: 'Dane biznesowe' },
-    { to: '/panel/admin/magic-links', label: 'Magic linki' },
-    { to: '/panel/admin/leads', label: 'Leady' },
-    { to: '/panel/admin/zgloszenia', label: 'Zgłoszenia' },
-    { to: '/panel/admin/cms', label: 'CMS strony' },
-    { to: '/panel/admin/audit', label: 'Audit log' },
-    { to: '/panel/kominiarz', label: '→ Tryb kominiarza' },
+    { to: '/panel/admin', label: 'Dashboard', short: 'Start', icon: LayoutDashboard },
+    { to: '/panel/admin/users', label: 'Użytkownicy', icon: Users },
+    { to: '/panel/admin/dane', label: 'Dane', icon: Database },
+    { to: '/panel/admin/leads', label: 'Leady', icon: UserPlus },
+    { to: '/panel/admin/zgloszenia', label: 'Zgłoszenia', icon: AlertTriangle },
+    { to: '/panel/admin/magic-links', label: 'Magic linki', icon: LinkIcon },
+    { to: '/panel/admin/cms', label: 'CMS', icon: FileEdit },
+    { to: '/panel/admin/audit', label: 'Audit', icon: ScrollText },
+    { to: '/panel/kominiarz', label: '→ Tryb kominiarza', short: 'Kominiarz', icon: ClipboardCheck },
   ],
 };
 
-const ROLE_LABEL = { kominiarz: 'Kominiarz', zarzadca: 'Zarządca / Spółdzielnia', mieszkaniec: 'Mieszkaniec', admin: 'Administrator' };
+const ROLE_LABEL = {
+  kominiarz: 'Kominiarz',
+  zarzadca: 'Zarządca / Spółdzielnia',
+  mieszkaniec: 'Mieszkaniec',
+  admin: 'Administrator',
+};
 
 export default function PanelLayout() {
   const nav = useNavigate();
   const loc = useLocation();
   const profile = getProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!profile) nav('/login');
   }, [profile, nav]);
-
-  // Zamykaj menu mobilne po nawigacji
-  useEffect(() => {
-    setIsSidebarOpen(false);
-  }, [loc.pathname]);
 
   if (!profile) return null;
 
@@ -69,54 +74,37 @@ export default function PanelLayout() {
     nav('/login');
   }
 
+  const activeItem = menu.find(it => loc.pathname === it.to)
+    || menu.find(it => loc.pathname.startsWith(it.to + '/'))
+    || menu[0];
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-      {/* Mobile Top Navigation */}
-      <div className="md:hidden bg-slate-900 text-white flex items-center justify-between px-4 py-3 sticky top-0 z-40 shadow-md">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-1 -ml-1 rounded-lg hover:bg-slate-800 transition-colors">
-            <Menu className="w-7 h-7 text-orange-400" />
-          </button>
-          <div className="text-lg font-bold text-orange-400">GS Instal</div>
-        </div>
-        <NotificationBell />
-      </div>
-
-      {/* Mobile Overlay */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden" 
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside 
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-100 flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 shadow-2xl md:shadow-none
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
-      >
+    <div className="min-h-screen bg-slate-50 flex">
+      {/* Sidebar — desktop only */}
+      <aside className="hidden md:flex md:flex-col w-64 bg-slate-900 text-slate-100 shadow-2xl">
         <div className="px-5 py-5 border-b border-slate-800 flex items-center justify-between">
           <Link to="/" className="block">
             <div className="text-lg font-bold text-orange-400">GS Instal</div>
             <div className="text-xs text-slate-400">Panel CRM</div>
           </Link>
-          <div className="flex items-center gap-2">
-            <div className="hidden md:block"><NotificationBell /></div>
-            <button className="md:hidden p-1 text-slate-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}>
-              <X className="w-6 h-6" />
-            </button>
-          </div>
+          <NotificationBell />
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {menu.map(item => (
-            <NavLink
-              key={item.to} to={item.to} end={item.to.split('/').length <= 3}
-              className={({ isActive }) =>
-                `block px-3 py-3 md:py-2 rounded-md text-sm transition-colors ${isActive ? 'bg-orange-500 text-white font-medium' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {menu.map(item => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to.split('/').length <= 3}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${isActive ? 'bg-orange-500 text-white font-medium' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+              >
+                {Icon && <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />}
+                <span className="truncate">{item.label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
         <div className="p-4 border-t border-slate-800 text-xs text-slate-400 bg-slate-900/50">
           <div className="font-semibold text-slate-200">{profile.full_name}</div>
@@ -127,13 +115,32 @@ export default function PanelLayout() {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden flex flex-col h-[calc(100vh-60px)] md:h-screen">
-        <div className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="max-w-7xl mx-auto pb-12">
+      {/* Main */}
+      <main className="flex-1 min-w-0 flex flex-col">
+        {/* Mobile sticky header */}
+        <div className="md:hidden mobile-header flex items-center justify-between gap-2 px-4 py-2">
+          <Link to="/" className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span className="text-orange-500">●</span> {activeItem?.label || 'GS Instal'}
+          </Link>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Link
+              to="/panel/profil"
+              className="w-9 h-9 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-sm"
+              aria-label="Profil"
+            >
+              {(profile.full_name || profile.email || '?').slice(0, 1).toUpperCase()}
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 md:py-8">
             <Outlet key={loc.pathname} />
           </div>
         </div>
+
+        <PanelBottomNav items={menu} profile={profile} onLogout={logout} />
       </main>
     </div>
   );

@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Phone, CalendarClock, XCircle } from 'lucide-react';
 import { api } from '../../lib/api';
-import { fmtDateTime, visitTypeLabel, statusColor, statusLabel } from '../../lib/format';
+import { fmtDateTime, visitTypeLabel } from '../../lib/format';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import StatusBadge from '../../components/mobile/StatusBadge';
+import BottomSheet from '../../components/mobile/BottomSheet';
+import Spinner from '../../components/mobile/Spinner';
 
 export default function WizytaDetail() {
   const { id } = useParams();
@@ -11,33 +16,37 @@ export default function WizytaDetail() {
   const [busy, setBusy] = useState(false);
   const [protocol, setProtocol] = useState(null);
   const [slots, setSlots] = useState([]);
-  const [showReschedule, setShowReschedule] = useState(false);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   async function load() {
     try {
       const data = await api(`/visits/${id}`);
       setV(data);
       if (data.status === 'zakonczona') {
-        try { setProtocol(await api(`/protocols/visit/${id}`)); } catch {}
+        try { setProtocol(await api(`/protocols/visit/${id}`)); } catch { /* no protocol */ }
       }
     } catch (e) { setErr(e.message); }
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
   async function openReschedule() {
-    setShowReschedule(true);
-    const r = await api(`/visits/slots/${v.apartment_id}`);
-    setSlots(r.slots);
+    setSheetOpen(true);
+    setSlotsLoading(true);
+    try {
+      const r = await api(`/visits/slots/${v.apartment_id}`);
+      setSlots(r.slots);
+    } finally { setSlotsLoading(false); }
   }
 
   async function reschedule(when) {
     setBusy(true);
     try {
-      // mieszkaniec nie ma PATCH dostępu, więc: cancel + book nowej wizyty (same type)
       await api(`/visits/${id}/cancel`, { method: 'POST' });
-      await api('/visits/book', { method: 'POST', body: {
-        apartment_id: v.apartment_id, scheduled_at: when, type: v.type, kominiarz_id: v.kominiarz_id,
-      }});
+      await api('/visits/book', {
+        method: 'POST',
+        body: { apartment_id: v.apartment_id, scheduled_at: when, type: v.type, kominiarz_id: v.kominiarz_id },
+      });
       nav('/panel/mieszkaniec/historia');
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
@@ -53,72 +62,131 @@ export default function WizytaDetail() {
     finally { setBusy(false); }
   }
 
-  if (err) return <div className="bg-rose-50 border border-rose-200 rounded p-4 text-rose-700">{err}</div>;
-  if (!v) return <div>Ładowanie…</div>;
+  if (err) return (
+    <div className="panel-page">
+      <MobilePageHeader title="Błąd" back />
+      <div className="mobile-card border-rose-200 bg-rose-50 text-rose-700">{err}</div>
+    </div>
+  );
+  if (!v) return (
+    <div className="panel-page">
+      <MobilePageHeader title="Ładowanie…" back />
+      <Spinner />
+    </div>
+  );
 
-  const byDay = slots.reduce((acc, s) => { const d = s.slice(0, 10); (acc[d] = acc[d] || []).push(s); return acc; }, {});
+  const byDay = slots.reduce((acc, s) => {
+    const d = s.slice(0, 10);
+    (acc[d] = acc[d] || []).push(s);
+    return acc;
+  }, {});
   const canModify = v.status === 'umowiona' && new Date(v.scheduled_at) > new Date();
 
   return (
-    <div className="space-y-4">
-      <Link to="/panel/mieszkaniec/historia" className="text-sm text-slate-500">← Historia</Link>
+    <div className="panel-page">
+      <MobilePageHeader title={visitTypeLabel[v.type] || v.type} back="/panel/mieszkaniec/historia" />
 
-      <div className="bg-white rounded-xl border p-6">
-        <div className="flex items-start justify-between mb-3">
+      <section className="mobile-card">
+        <div className="flex items-start justify-between gap-2 mb-3">
           <div>
-            <h1 className="text-2xl font-bold">{visitTypeLabel[v.type] || v.type}</h1>
-            <p className="text-slate-500">{fmtDateTime(v.scheduled_at)}</p>
-            <p className="text-sm text-slate-500 mt-1">📍 {v.building_address}{v.apt_number ? `, m. ${v.apt_number}` : ''} • {v.city}</p>
+            <div className="text-xs uppercase text-slate-500 tracking-wide font-semibold">Termin</div>
+            <div className="font-bold text-lg text-slate-900">{fmtDateTime(v.scheduled_at)}</div>
           </div>
-          <span className={`text-xs px-3 py-1 rounded ${statusColor[v.status]}`}>{statusLabel[v.status]}</span>
+          <StatusBadge status={v.status} />
         </div>
+        <div className="text-sm text-slate-600">
+          📍 {v.building_address}{v.apt_number ? `, m. ${v.apt_number}` : ''} • {v.city}
+        </div>
+      </section>
 
-        {v.kominiarz_name && (
-          <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-            <div className="text-xs uppercase text-slate-500 mb-1">Kominiarz</div>
-            <div className="font-semibold">{v.kominiarz_name}</div>
-            {v.nr_uprawnien && <div className="text-xs text-slate-500">Nr uprawnień: {v.nr_uprawnien}</div>}
+      {v.kominiarz_name && (
+        <section className="mobile-card">
+          <div className="text-xs uppercase text-slate-500 tracking-wide font-semibold mb-2">Kominiarz</div>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-lg">
+              {v.kominiarz_name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-slate-900 truncate">{v.kominiarz_name}</div>
+              {v.nr_uprawnien && <div className="text-xs text-slate-500">Nr uprawnień: {v.nr_uprawnien}</div>}
+            </div>
             {v.kominiarz_phone && (
-              <a href={`tel:${v.kominiarz_phone}`} className="text-orange-600 text-sm hover:underline">📞 {v.kominiarz_phone}</a>
+              <a href={`tel:${v.kominiarz_phone}`} className="btn-primary py-2.5 px-4" aria-label={`Zadzwoń ${v.kominiarz_phone}`}>
+                <Phone className="w-4 h-4" />
+                Zadzwoń
+              </a>
             )}
           </div>
-        )}
+        </section>
+      )}
 
-        {v.notes && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-            <div className="text-xs uppercase text-blue-600 mb-1">Uwagi</div>
-            {v.notes}
+      {v.notes && (
+        <section className="mobile-card bg-blue-50 border-blue-200">
+          <div className="text-xs uppercase text-blue-600 tracking-wide font-bold mb-1">Uwagi</div>
+          <p className="text-sm text-slate-800">{v.notes}</p>
+        </section>
+      )}
+
+      {protocol && (
+        <section className="mobile-card">
+          <div className="text-xs uppercase text-slate-500 tracking-wide font-semibold mb-2">Protokół wizyty</div>
+          <div className="space-y-2 text-sm">
+            <Row label="Wynik">
+              <strong className={
+                protocol.result === 'sprawny' ? 'text-emerald-600' :
+                protocol.result === 'nieszczelny' ? 'text-amber-600' : 'text-rose-600'
+              }>{protocol.result.toUpperCase()}</strong>
+            </Row>
+            <Row label="Podpisał">{protocol.signed_by}</Row>
+            {protocol.findings && <Row label="Usterki">{protocol.findings}</Row>}
+            {protocol.recommendations && <Row label="Zalecenia">{protocol.recommendations}</Row>}
           </div>
-        )}
+        </section>
+      )}
 
-        {canModify && (
-          <div className="flex gap-2 mt-6 pt-4 border-t">
-            <button onClick={openReschedule} disabled={busy}
-              className="px-4 py-2 border-2 border-slate-300 hover:border-orange-400 rounded-md text-sm font-medium">
-              📅 Przełóż termin
+      {canModify && (
+        <div className="sticky-cta">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 flex gap-2">
+            <button
+              onClick={openReschedule}
+              disabled={busy}
+              className="btn-secondary flex-1"
+            >
+              <CalendarClock className="w-4 h-4 text-orange-500" />
+              Przełóż
             </button>
-            <button onClick={cancel} disabled={busy}
-              className="px-4 py-2 border-2 border-rose-300 text-rose-600 hover:bg-rose-50 rounded-md text-sm font-medium">
-              ✗ Anuluj wizytę
+            <button
+              onClick={cancel}
+              disabled={busy}
+              className="btn-danger flex-1"
+            >
+              <XCircle className="w-4 h-4" />
+              Anuluj
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {showReschedule && (
-        <div className="bg-white rounded-xl border p-6">
-          <h3 className="font-semibold mb-3">Wybierz nowy termin</h3>
-          {Object.keys(byDay).length === 0 && <div className="text-slate-400 text-sm">Ładowanie...</div>}
-          <div className="space-y-3">
+      <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Wybierz nowy termin">
+        {slotsLoading ? (
+          <Spinner label="Pobieram wolne okna…" />
+        ) : Object.keys(byDay).length === 0 ? (
+          <div className="text-center text-slate-400 py-8 text-sm">Brak wolnych slotów.</div>
+        ) : (
+          <div className="space-y-4">
             {Object.entries(byDay).map(([day, dayslots]) => (
               <div key={day}>
-                <div className="text-sm font-medium text-slate-600 mb-1">
+                <div className="text-sm font-semibold text-slate-700 mb-2">
                   {new Date(day).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-3 gap-2">
                   {dayslots.map(s => (
-                    <button key={s} onClick={() => reschedule(s)} disabled={busy}
-                      className="px-3 py-1.5 border-2 hover:border-orange-400 hover:bg-orange-50 rounded text-sm">
+                    <button
+                      key={s}
+                      onClick={() => reschedule(s)}
+                      disabled={busy}
+                      className="py-3 rounded-xl text-sm font-bold border-2 border-slate-200 active:border-orange-300 active:bg-orange-50"
+                    >
                       {s.slice(11, 16)}
                     </button>
                   ))}
@@ -126,23 +194,17 @@ export default function WizytaDetail() {
               </div>
             ))}
           </div>
-          <button onClick={() => setShowReschedule(false)} className="mt-3 text-sm text-slate-500">Anuluj</button>
-        </div>
-      )}
+        )}
+      </BottomSheet>
+    </div>
+  );
+}
 
-      {protocol && (
-        <div className="bg-white rounded-xl border p-6">
-          <h3 className="font-semibold mb-3">Protokół wizyty</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><span className="text-slate-500">Wynik:</span> <strong className={
-              protocol.result === 'sprawny' ? 'text-emerald-600' :
-              protocol.result === 'nieszczelny' ? 'text-amber-600' : 'text-rose-600'}>{protocol.result.toUpperCase()}</strong></div>
-            <div><span className="text-slate-500">Podpisał:</span> {protocol.signed_by}</div>
-            <div className="col-span-2"><span className="text-slate-500">Usterki:</span> {protocol.findings || '—'}</div>
-            <div className="col-span-2"><span className="text-slate-500">Zalecenia:</span> {protocol.recommendations || '—'}</div>
-          </div>
-        </div>
-      )}
+function Row({ label, children }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-slate-500 w-24 flex-shrink-0">{label}:</span>
+      <span className="flex-1 text-slate-800">{children}</span>
     </div>
   );
 }

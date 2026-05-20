@@ -10,6 +10,7 @@ import Team from '../components/Team';
 import ContactForm from '../components/ContactForm';
 import ChimneySweepGame from '../components/ChimneySweepGame';
 import Footer from '../components/Footer';
+import MobileStickyCta from '../components/MobileStickyCta';
 
 function setMeta(name, content) {
   if (!content) return;
@@ -45,6 +46,7 @@ export default function PublicSite() {
         <ChimneySweepGame />
       </main>
       <Footer />
+      <MobileStickyCta />
     </div>
   );
 }

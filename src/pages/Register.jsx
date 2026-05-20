@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { api, setSession } from '../lib/api';
 
 export default function Register() {
@@ -22,30 +23,54 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
-      <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-8">
-        <Link to="/login" className="text-sm text-slate-500 hover:text-slate-900">← Logowanie</Link>
-        <h1 className="text-2xl font-bold mt-2 mb-6">Rejestracja</h1>
+    <div className="min-h-[100svh] flex flex-col bg-slate-100" style={{ paddingTop: 'var(--safe-top)', paddingBottom: 'var(--safe-bottom)' }}>
+      <div className="px-4 pt-4">
+        <Link to="/login" className="btn-ghost -ml-2 text-sm">
+          <ArrowLeft className="w-4 h-4" />
+          Logowanie
+        </Link>
+      </div>
 
-        <form onSubmit={submit} className="space-y-3">
-          <input className="w-full border rounded-md px-3 py-2" placeholder="imię i nazwisko"
-            value={form.full_name} onChange={e => set('full_name', e.target.value)} required />
-          <input className="w-full border rounded-md px-3 py-2" placeholder="email" type="email"
-            value={form.email} onChange={e => set('email', e.target.value)} required />
-          <input className="w-full border rounded-md px-3 py-2" placeholder="telefon"
-            value={form.phone} onChange={e => set('phone', e.target.value)} />
-          <input className="w-full border rounded-md px-3 py-2" placeholder="hasło" type="password"
-            value={form.password} onChange={e => set('password', e.target.value)} required />
-          <select className="w-full border rounded-md px-3 py-2" value={form.role} onChange={e => set('role', e.target.value)}>
-            <option value="mieszkaniec">Jestem mieszkańcem</option>
-            <option value="zarzadca">Jestem zarządcą / przedstawicielem spółdzielni</option>
-            <option value="kominiarz">Jestem kominiarzem (GS Instal)</option>
-          </select>
-          {err && <div className="text-rose-600 text-sm">{err}</div>}
-          <button disabled={busy} className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-md font-medium disabled:opacity-50">
-            {busy ? '...' : 'Załóż konto'}
-          </button>
-        </form>
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 md:p-8">
+          <h1 className="text-2xl font-bold mb-6">Rejestracja</h1>
+
+          <form onSubmit={submit} className="space-y-3">
+            <div>
+              <label htmlFor="full_name" className="form-label">Imię i nazwisko</label>
+              <input id="full_name" className="form-input" autoComplete="name"
+                value={form.full_name} onChange={e => set('full_name', e.target.value)} required />
+            </div>
+            <div>
+              <label htmlFor="email" className="form-label">Email</label>
+              <input id="email" className="form-input" type="email" inputMode="email" autoComplete="email"
+                value={form.email} onChange={e => set('email', e.target.value)} required />
+            </div>
+            <div>
+              <label htmlFor="phone" className="form-label">Telefon</label>
+              <input id="phone" className="form-input" type="tel" inputMode="tel" autoComplete="tel"
+                value={form.phone} onChange={e => set('phone', e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="password" className="form-label">Hasło</label>
+              <input id="password" className="form-input" type="password" autoComplete="new-password"
+                value={form.password} onChange={e => set('password', e.target.value)} required />
+            </div>
+            <div>
+              <label htmlFor="role" className="form-label">Jestem</label>
+              <select id="role" className="form-input"
+                value={form.role} onChange={e => set('role', e.target.value)}>
+                <option value="mieszkaniec">mieszkańcem</option>
+                <option value="zarzadca">zarządcą / przedstawicielem spółdzielni</option>
+                <option value="kominiarz">kominiarzem (GS Instal)</option>
+              </select>
+            </div>
+            {err && <div className="text-rose-600 text-sm" role="alert">{err}</div>}
+            <button disabled={busy} className="btn-primary w-full py-4 text-base">
+              {busy ? '…' : 'Załóż konto'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

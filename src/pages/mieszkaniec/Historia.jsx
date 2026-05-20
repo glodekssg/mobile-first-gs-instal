@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FileDown, History as HistoryIcon, ChevronRight } from 'lucide-react';
 import { api } from '../../lib/api';
-import { fmtDateTime, visitTypeLabel, statusColor, statusLabel } from '../../lib/format';
+import { fmtDateTime, visitTypeLabel } from '../../lib/format';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import EmptyState from '../../components/mobile/EmptyState';
+import StatusBadge from '../../components/mobile/StatusBadge';
 
 export default function Historia() {
   const [visits, setVisits] = useState([]);
@@ -13,46 +17,59 @@ export default function Historia() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Historia kontroli</h1>
+    <div className="panel-page">
+      <MobilePageHeader title="Historia kontroli" back="/panel/mieszkaniec" sticky={false} />
 
-      <div className="bg-white rounded-xl border p-5">
-        <h3 className="font-semibold mb-3">Wszystkie wizyty</h3>
-        <div className="divide-y">
+      <section>
+        <h2 className="font-bold text-slate-900 mb-2 px-1">Wszystkie wizyty</h2>
+        <div className="mobile-stack">
           {visits.map(v => (
-            <Link key={v.id} to={`/panel/mieszkaniec/wizyta/${v.id}`}
-              className="block py-3 -mx-5 px-5 hover:bg-slate-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{visitTypeLabel[v.type] || v.type}</div>
-                  <div className="text-sm text-slate-500">{fmtDateTime(v.scheduled_at)} • {v.building_address}{v.apt_number ? ` / m. ${v.apt_number}` : ''}</div>
+            <Link
+              key={v.id}
+              to={`/panel/mieszkaniec/wizyta/${v.id}`}
+              className="mobile-card active:bg-slate-50 flex items-center gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-900 truncate">{visitTypeLabel[v.type] || v.type}</div>
+                <div className="text-sm text-slate-500 truncate">{fmtDateTime(v.scheduled_at)}</div>
+                <div className="text-xs text-slate-400 truncate mt-0.5">
+                  📍 {v.building_address}{v.apt_number ? ` / m. ${v.apt_number}` : ''}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded ${statusColor[v.status]}`}>{statusLabel[v.status]}</span>
-                  <span className="text-orange-600 text-sm">Szczegóły →</span>
-                </div>
+                <StatusBadge status={v.status} className="mt-2" />
               </div>
+              <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
             </Link>
           ))}
-          {visits.length === 0 && <div className="py-6 text-center text-slate-400 text-sm">Brak wizyt w historii.</div>}
+          {visits.length === 0 && (
+            <EmptyState icon={HistoryIcon} title="Brak historii" body="Twoja pierwsza wizyta pojawi się tutaj." />
+          )}
         </div>
-      </div>
+      </section>
 
-      <div className="bg-white rounded-xl border p-5">
-        <h3 className="font-semibold mb-3">Protokoły do pobrania</h3>
-        <div className="divide-y">
+      <section>
+        <h2 className="font-bold text-slate-900 mb-2 px-1">Protokoły do pobrania</h2>
+        <div className="mobile-stack">
           {protocols.map(p => (
-            <div key={p.id} className="py-3 flex items-center justify-between">
-              <div>
-                <div className="font-medium">{visitTypeLabel[p.visit_type] || p.visit_type} — {p.result}</div>
-                <div className="text-sm text-slate-500">{fmtDateTime(p.signed_at)} • podpisał: {p.signed_by}</div>
+            <div key={p.id} className="mobile-card flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                <FileDown className="w-5 h-5" />
               </div>
-              <button onClick={() => downloadPdf(p)} className="text-orange-600 text-sm hover:underline">Pobierz PDF</button>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-900 truncate">
+                  {visitTypeLabel[p.visit_type] || p.visit_type} — {p.result}
+                </div>
+                <div className="text-xs text-slate-500 truncate">
+                  {fmtDateTime(p.signed_at)} • {p.signed_by}
+                </div>
+              </div>
+              <button onClick={() => downloadPdf(p)} className="btn-secondary text-sm">PDF</button>
             </div>
           ))}
-          {protocols.length === 0 && <div className="py-6 text-center text-slate-400 text-sm">Brak protokołów.</div>}
+          {protocols.length === 0 && (
+            <EmptyState icon={FileDown} title="Brak protokołów" body="Protokoły pojawią się tu po zakończonych kontrolach." />
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

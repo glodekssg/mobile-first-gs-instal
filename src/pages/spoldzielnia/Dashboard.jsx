@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Building2, AlertTriangle, FileText, Lightbulb, MapPin, ChevronRight } from 'lucide-react';
 import { api, getProfile } from '../../lib/api';
 import { fmtDate } from '../../lib/format';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import EmptyState from '../../components/mobile/EmptyState';
 
 export default function SpoldzielniaDashboard() {
   const [coops, setCoops] = useState([]);
@@ -19,90 +22,108 @@ export default function SpoldzielniaDashboard() {
   const openIssues = issues.filter(i => i.status === 'open');
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Panel zarządcy</h1>
-        <p className="text-slate-500">Witaj, {me?.full_name}. Kliknij liczbę żeby zobaczyć szczegóły.</p>
-      </div>
+    <div className="panel-page">
+      <MobilePageHeader title={`Witaj, ${me?.full_name?.split(' ')[0] || ''}`} subtitle="Panel zarządcy" sticky={false} />
 
-      <div className="grid grid-cols-3 gap-4">
-        <Kpi to="/panel/spoldzielnia/obiekty" label="Spółdzielnie/Wspólnoty" value={coops.length} />
-        <Kpi to="/panel/spoldzielnia/raporty" label="Otwarte eskalacje" value={escalations.length} tone="rose" />
-        <Kpi to="/panel/spoldzielnia/zgloszenia?status=open" label="Zgłoszenia mieszkańców" value={openIssues.length} tone="amber" />
-      </div>
+      <section className="grid grid-cols-3 gap-2">
+        <Kpi to="/panel/spoldzielnia/obiekty" icon={Building2} label="Organizacje" value={coops.length} />
+        <Kpi to="/panel/spoldzielnia/raporty" icon={AlertTriangle} label="Eskalacje" value={escalations.length} tone="rose" />
+        <Kpi to="/panel/spoldzielnia/zgloszenia?status=open" icon={FileText} label="Zgłoszenia" value={openIssues.length} tone="amber" />
+      </section>
 
-      <div className="bg-white rounded-xl border p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Twoje organizacje</h3>
-          <Link to="/panel/spoldzielnia/obiekty" className="text-sm text-orange-600 hover:underline">Lista obiektów →</Link>
+      <section>
+        <div className="flex items-center justify-between mb-2 px-1">
+          <h2 className="font-bold text-slate-900">Twoje organizacje</h2>
+          <Link to="/panel/spoldzielnia/obiekty" className="text-sm text-orange-600 font-semibold">Lista obiektów →</Link>
         </div>
-        <div className="divide-y">
-          {coops.map(c => (
-            <div key={c.id} className="py-3">
-              <div className="font-medium">{c.name}</div>
-              <div className="text-sm text-slate-500">{c.address} • {c.buildings_count} budynk(ów)</div>
-            </div>
-          ))}
-          {coops.length === 0 && <div className="py-6 text-center text-slate-400 text-sm">Brak organizacji.</div>}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border p-5">
-        <h3 className="font-semibold mb-3">Akcje wymagające Twojej uwagi</h3>
-        <div className="divide-y">
-          {nba.map(a => (
-            <div key={a.id} className="py-3">
-              <div className="flex items-center gap-2">
-                <PriorityDot priority={a.priority} />
-                <span className="font-medium">{a.title}</span>
-              </div>
-              <div className="text-sm text-slate-500 mt-1">{a.rationale}</div>
-              {a.building_address && <div className="text-xs text-slate-400 mt-1">📍 {a.building_address}{a.apt_number ? ` / m. ${a.apt_number}` : ''}</div>}
-            </div>
-          ))}
-          {nba.length === 0 && <div className="py-6 text-center text-slate-400 text-sm">Brak akcji.</div>}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Najnowsze zgłoszenia mieszkańców</h3>
-          <Link to="/panel/spoldzielnia/zgloszenia" className="text-sm text-orange-600 hover:underline">Wszystkie →</Link>
-        </div>
-        <div className="divide-y">
-          {issues.slice(0, 8).map(i => (
-            <Link key={i.id} to="/panel/spoldzielnia/zgloszenia"
-              className="block py-3 -mx-4 px-4 hover:bg-slate-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{i.title}</div>
-                  <div className="text-xs text-slate-500">{i.reporter_name || '(magic link)'} • {i.address} m. {i.apt_number} • {fmtDate(i.created_at)}</div>
+        <div className="mobile-stack">
+          {coops.length === 0 ? (
+            <EmptyState icon={Building2} title="Brak organizacji" body="Skontaktuj się z administratorem." />
+          ) : (
+            coops.map(c => (
+              <Link key={c.id} to="/panel/spoldzielnia/obiekty" className="mobile-card flex items-center gap-3 active:bg-slate-50">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-5 h-5" />
                 </div>
-                <span className={`text-xs px-2 py-1 rounded ${i.severity === 'urgent' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
-                  {i.severity}
-                </span>
-              </div>
-              {i.description && <div className="text-sm text-slate-600 mt-1">{i.description}</div>}
-            </Link>
-          ))}
-          {issues.length === 0 && <div className="py-6 text-center text-slate-400 text-sm">Brak zgłoszeń.</div>}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 truncate">{c.name}</div>
+                  <div className="text-xs text-slate-500 truncate">{c.address} • {c.buildings_count} budynk(ów)</div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
+              </Link>
+            ))
+          )}
         </div>
-      </div>
+      </section>
+
+      {nba.length > 0 && (
+        <section>
+          <h2 className="font-bold text-slate-900 mb-2 px-1">Akcje wymagające uwagi</h2>
+          <div className="mobile-stack">
+            {nba.map(a => (
+              <article key={a.id} className="mobile-card flex items-start gap-3">
+                <PriorityDot priority={a.priority} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-900">{a.title}</div>
+                  <p className="text-sm text-slate-600">{a.rationale}</p>
+                  {a.building_address && (
+                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {a.building_address}{a.apt_number ? ` / m. ${a.apt_number}` : ''}
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {issues.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <h2 className="font-bold text-slate-900">Najnowsze zgłoszenia</h2>
+            <Link to="/panel/spoldzielnia/zgloszenia" className="text-sm text-orange-600 font-semibold">Wszystkie →</Link>
+          </div>
+          <div className="mobile-stack">
+            {issues.slice(0, 5).map(i => (
+              <Link key={i.id} to="/panel/spoldzielnia/zgloszenia" className="mobile-card flex items-start gap-3 active:bg-slate-50">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${i.severity === 'urgent' ? 'bg-rose-100 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>
+                  <Lightbulb className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 truncate">{i.title}</div>
+                  <div className="text-xs text-slate-500 truncate">{i.reporter_name || '(magic link)'} • {i.address}{i.apt_number ? `, m. ${i.apt_number}` : ''}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{fmtDate(i.created_at)}</div>
+                </div>
+                {i.severity === 'urgent' && <span className="chip bg-rose-200 text-rose-800">PILNE</span>}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
 
-function Kpi({ to, label, value, tone = 'slate' }) {
-  const c = tone === 'rose' ? 'bg-rose-50 border-rose-200' : tone === 'amber' ? 'bg-amber-50 border-amber-200' : 'bg-white';
+function Kpi({ to, icon: Icon, label, value, tone = 'slate' }) {
+  const tones = {
+    slate: 'bg-white',
+    rose: 'bg-rose-50 border-rose-200',
+    amber: 'bg-amber-50 border-amber-200',
+  };
   return (
-    <Link to={to}
-      className={`rounded-xl border p-5 ${c} transition hover:shadow-md hover:-translate-y-0.5 cursor-pointer block`}>
-      <div className="text-xs uppercase text-slate-500">{label}</div>
-      <div className="text-3xl font-bold mt-1">{value}</div>
+    <Link to={to} className={`kpi-card ${tones[tone]} active:opacity-90`}>
+      <div className="flex items-center gap-1.5">
+        <Icon className="w-4 h-4 text-orange-600" />
+        <span className="text-[10px] uppercase tracking-wide font-bold text-slate-500">{label}</span>
+      </div>
+      <div className="kpi-value mt-2">{value}</div>
     </Link>
   );
 }
+
 function PriorityDot({ priority }) {
-  const t = priority <= 20 ? 'bg-rose-500' : priority <= 40 ? 'bg-amber-500' : 'bg-slate-400';
-  return <span className={`w-2 h-2 rounded-full ${t}`} />;
+  const tone = priority <= 20 ? 'bg-rose-500' : priority <= 40 ? 'bg-amber-500' : 'bg-slate-400';
+  return <span className={`w-3 h-3 rounded-full mt-1.5 ${tone} flex-shrink-0`} />;
 }

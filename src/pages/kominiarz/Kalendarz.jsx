@@ -1,20 +1,31 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, MapPin } from 'lucide-react';
 import { api } from '../../lib/api';
-import { visitTypeLabel, statusColor, statusLabel } from '../../lib/format';
+import { visitTypeLabel, statusColor, statusLabel, fmtTime } from '../../lib/format';
 import SelectOrCreate from '../../components/SelectOrCreate';
 import { createBuilding, buildingFields, createApartment } from '../../lib/creators';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import BottomSheet from '../../components/mobile/BottomSheet';
+import EmptyState from '../../components/mobile/EmptyState';
 
 const HOURS = [8, 9, 10, 11, 12, 13, 14, 15];
+const TYPES = ['kontrola', 'czyszczenie', 'inspekcja_kamera', 'montaz_wkladu', 'montaz_nasady', 'kontrola_gaz', 'opinia'];
+
+function mondayOf(d) {
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  const m = new Date(d); m.setDate(m.getDate() + diff); m.setHours(0, 0, 0, 0); return m;
+}
 
 export default function Kalendarz() {
   const [visits, setVisits] = useState([]);
   const [buildings, setBuildings] = useState([]);
   const [apartments, setApartments] = useState([]);
-  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
-  const [creating, setCreating] = useState(null); // { date: 'YYYY-MM-DD', time: 'HH:00' }
+  const [view, setView] = useState('day'); // 'day' | 'week'
+  const [cursor, setCursor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  const [sheet, setSheet] = useState(null); // { date, time? }
   const [form, setForm] = useState({ building_id: '', apartment_id: '', type: 'kontrola', duration_min: 60, notes: '' });
-  const nav = useNavigate();
 
   function load() {
     api('/visits').then(setVisits).catch(console.error);
@@ -23,28 +34,29 @@ export default function Kalendarz() {
   }
   useEffect(load, []);
 
-  const days = Array.from({ length: 5 }, (_, i) => {
+  const dayVisits = useMemo(() => {
+    const iso = cursor.toISOString().slice(0, 10);
+    return visits.filter(v => v.scheduled_at?.slice(0, 10) === iso)
+      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+  }, [visits, cursor]);
+
+  const weekStart = useMemo(() => mondayOf(cursor), [cursor]);
+  const weekDays = useMemo(() => Array.from({ length: 5 }, (_, i) => {
     const d = new Date(weekStart); d.setDate(d.getDate() + i); return d;
-  });
+  }), [weekStart]);
 
-  function visitsAt(dayIso, hour) {
-    return visits.filter(v => {
-      if (!v.scheduled_at) return false;
-      const d = v.scheduled_at.slice(0, 10);
-      const h = parseInt(v.scheduled_at.slice(11, 13));
-      return d === dayIso && h === hour;
-    });
+  function shift(days) {
+    const d = new Date(cursor); d.setDate(d.getDate() + days); setCursor(d);
   }
-
-  function openCreate(dayIso, hour) {
-    setCreating({ date: dayIso, time: `${String(hour).padStart(2, '0')}:00` });
+  function openCreate(dateIso, time) {
+    setSheet({ date: dateIso, time });
     setForm({ building_id: '', apartment_id: '', type: 'kontrola', duration_min: 60, notes: '' });
   }
-
   async function create(e) {
     e.preventDefault();
-    if (!creating) return;
-    const scheduled = new Date(`${creating.date}T${creating.time}`).toISOString();
+    if (!sheet) return;
+    const t = sheet.time || '09:00';
+    const scheduled = new Date(`${sheet.date}T${t}`).toISOString();
     const body = {
       building_id: Number(form.building_id),
       scheduled_at: scheduled,
@@ -54,80 +66,153 @@ export default function Kalendarz() {
     };
     if (form.apartment_id) body.apartment_id = Number(form.apartment_id);
     await api('/visits', { method: 'POST', body });
-    setCreating(null);
+    setSheet(null);
     load();
   }
 
   const aptsForBuilding = form.building_id ? apartments.filter(a => a.building_id === Number(form.building_id)) : [];
+  const isToday = cursor.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Kalendarz</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => shiftWeek(-7)} className="px-3 py-1.5 border rounded-md text-sm">‹ Poprzedni</button>
-          <button onClick={() => setWeekStart(mondayOf(new Date()))} className="px-3 py-1.5 border rounded-md text-sm">Dziś</button>
-          <button onClick={() => shiftWeek(7)} className="px-3 py-1.5 border rounded-md text-sm">Następny ›</button>
-        </div>
-      </div>
-
-      <div className="text-sm text-slate-500">
-        Tydzień {weekStart.toLocaleDateString('pl-PL')} – {days[4].toLocaleDateString('pl-PL')}
-        <span className="ml-3 text-xs text-slate-400">💡 Kliknij w pusty slot, by szybko umówić wizytę</span>
-      </div>
-
-      <div className="bg-white rounded-lg border overflow-hidden">
-        <div className="grid grid-cols-[80px_repeat(5,1fr)] divide-x divide-slate-200">
-          <div className="bg-slate-50"></div>
-          {days.map(d => (
-            <div key={d.toISOString()} className="bg-slate-50 px-3 py-2 text-center">
-              <div className="text-xs uppercase text-slate-500">{d.toLocaleDateString('pl-PL', { weekday: 'short' })}</div>
-              <div className="text-lg font-semibold">{d.getDate()}</div>
-            </div>
-          ))}
-        </div>
-        {HOURS.map(h => (
-          <div key={h} className="grid grid-cols-[80px_repeat(5,1fr)] divide-x divide-slate-200 border-t">
-            <div className="text-xs text-slate-500 p-2 text-right pr-3 bg-slate-50">{h}:00</div>
-            {days.map(d => {
-              const iso = d.toISOString().slice(0, 10);
-              const vs = visitsAt(iso, h);
-              return (
-                <div key={iso + h} className="min-h-[60px] p-1 hover:bg-slate-50 relative group">
-                  {vs.length === 0 ? (
-                    <button onClick={() => openCreate(iso, h)}
-                      className="absolute inset-1 opacity-0 group-hover:opacity-100 transition border-2 border-dashed border-slate-300 hover:border-orange-400 rounded text-xs text-slate-400 hover:text-orange-600">
-                      + Umów
-                    </button>
-                  ) : (
-                    vs.map(v => (
-                      <Link key={v.id} to={`/panel/kominiarz/wizyta/${v.id}`}
-                        className={`block text-xs rounded p-1.5 ${statusColor[v.status]} hover:opacity-80 mb-1`}>
-                        <div className="font-semibold">{v.scheduled_at?.slice(11, 16)}</div>
-                        <div className="truncate text-[10px]">{v.building_address}{v.apt_number ? `/m. ${v.apt_number}` : ''}</div>
-                        <div className="text-[10px] opacity-70">{visitTypeLabel[v.type]}</div>
-                      </Link>
-                    ))
-                  )}
-                </div>
-              );
-            })}
+    <div className="panel-page">
+      <MobilePageHeader
+        title="Kalendarz"
+        subtitle={view === 'day'
+          ? cursor.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })
+          : `${weekStart.toLocaleDateString('pl-PL')} – ${weekDays[4].toLocaleDateString('pl-PL')}`}
+        right={(
+          <div className="flex gap-1 ml-2">
+            <button onClick={() => setView('day')} className={`chip ${view === 'day' ? 'chip-active' : 'chip-idle'}`}>Dzień</button>
+            <button onClick={() => setView('week')} className={`chip ${view === 'week' ? 'chip-active' : 'chip-idle'}`}>Tydzień</button>
           </div>
-        ))}
+        )}
+      />
+
+      {/* Nawigacja datami */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => shift(view === 'day' ? -1 : -7)} className="btn-secondary px-3" aria-label="Poprzedni">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <button onClick={() => setCursor(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })}
+          className={`flex-1 ${isToday ? 'btn-primary' : 'btn-secondary'} py-3`}>
+          Dziś
+        </button>
+        <button onClick={() => shift(view === 'day' ? 1 : 7)} className="btn-secondary px-3" aria-label="Następny">
+          <ChevronRight className="w-5 h-5" />
+        </button>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
-        <strong>Integracja Google Calendar:</strong> kalendarz synchronizuje się dwukierunkowo z Google Calendar kominiarza
-        (połącz w „Ustawienia"). Sloty udostępniane mieszkańcom są wyliczane z wolnych okien.
+      {view === 'day' ? (
+        <section className="mobile-stack">
+          {dayVisits.length === 0 ? (
+            <EmptyState
+              icon={CalendarIcon}
+              title="Brak wizyt"
+              body="Dodaj wizytę na ten dzień."
+              action={<button onClick={() => openCreate(cursor.toISOString().slice(0, 10))} className="btn-primary">Nowa wizyta</button>}
+            />
+          ) : (
+            dayVisits.map(v => (
+              <Link key={v.id} to={`/panel/kominiarz/wizyta/${v.id}`} className="mobile-card flex items-stretch gap-3 active:bg-slate-50">
+                <div className={`flex flex-col items-center justify-center px-3 py-2 rounded-xl ${statusColor[v.status]}`}>
+                  <div className="text-lg font-extrabold leading-none">{fmtTime(v.scheduled_at)}</div>
+                  <div className="text-[10px] mt-1">{v.duration_min || 60}min</div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 truncate flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    {v.building_address}{v.apt_number && <span className="text-slate-500"> / m. {v.apt_number}</span>}
+                  </div>
+                  <div className="text-sm text-slate-500 truncate">{visitTypeLabel[v.type]}</div>
+                  <div className="text-xs text-slate-500 mt-1">{statusLabel[v.status]}</div>
+                </div>
+              </Link>
+            ))
+          )}
+        </section>
+      ) : (
+        <section className="space-y-3">
+          {weekDays.map(d => {
+            const iso = d.toISOString().slice(0, 10);
+            const vs = visits.filter(v => v.scheduled_at?.slice(0, 10) === iso)
+              .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+            const dayIsToday = iso === new Date().toISOString().slice(0, 10);
+            return (
+              <div key={iso} className="mobile-card">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className={`text-xs uppercase font-bold ${dayIsToday ? 'text-orange-600' : 'text-slate-500'}`}>
+                      {d.toLocaleDateString('pl-PL', { weekday: 'long' })}
+                    </div>
+                    <div className="text-lg font-bold text-slate-900">{d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}</div>
+                  </div>
+                  <button onClick={() => openCreate(iso)} className="btn-ghost text-orange-600">
+                    <Plus className="w-4 h-4" /> Dodaj
+                  </button>
+                </div>
+                {vs.length === 0 ? (
+                  <div className="text-sm text-slate-400">— wolny dzień —</div>
+                ) : (
+                  <div className="space-y-2">
+                    {vs.map(v => (
+                      <Link key={v.id} to={`/panel/kominiarz/wizyta/${v.id}`}
+                        className={`block rounded-xl p-2.5 active:opacity-80 ${statusColor[v.status]}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold">{fmtTime(v.scheduled_at)}</span>
+                          <span className="text-xs">{visitTypeLabel[v.type]}</span>
+                        </div>
+                        <div className="text-xs truncate mt-0.5">{v.building_address}{v.apt_number ? ` / m. ${v.apt_number}` : ''}</div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      <div className="mobile-card bg-amber-50 border-amber-200 text-sm text-amber-900">
+        <strong>Google Calendar:</strong> dwukierunkowa synchronizacja z kalendarzem kominiarza. Sloty dla mieszkańców wyliczane z wolnych okien.
       </div>
 
-      {creating && (
-        <Modal onClose={() => setCreating(null)}>
-          <form onSubmit={create} className="space-y-3">
-            <h3 className="font-semibold text-lg">Nowa wizyta</h3>
-            <div className="bg-orange-50 border border-orange-200 rounded p-2 text-sm">
-              📅 {new Date(creating.date).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} o {creating.time}
+      <button
+        type="button"
+        onClick={() => openCreate(cursor.toISOString().slice(0, 10))}
+        className="fab md:hidden"
+        aria-label="Nowa wizyta"
+      >
+        <Plus className="w-6 h-6" strokeWidth={2.5} />
+      </button>
+
+      <BottomSheet
+        open={!!sheet}
+        onClose={() => setSheet(null)}
+        title="Nowa wizyta"
+        footer={
+          <button form="new-visit-form" type="submit" className="btn-primary w-full py-3.5">
+            Zaplanuj wizytę
+          </button>
+        }
+      >
+        {sheet && (
+          <form id="new-visit-form" onSubmit={create} className="space-y-3">
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm">
+              📅 {new Date(sheet.date).toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {sheet.time && ` o ${sheet.time}`}
             </div>
+            {!sheet.time && (
+              <div>
+                <label className="form-label">Godzina</label>
+                <select
+                  className="form-input"
+                  value={form._hour || '09:00'}
+                  onChange={e => { const v = e.target.value; setForm(f => ({ ...f, _hour: v })); setSheet(s => ({ ...s, time: v })); }}
+                >
+                  {HOURS.map(h => <option key={h} value={`${String(h).padStart(2, '0')}:00`}>{String(h).padStart(2, '0')}:00</option>)}
+                </select>
+              </div>
+            )}
             <SelectOrCreate
               label="Budynek"
               value={form.building_id}
@@ -164,37 +249,25 @@ export default function Kalendarz() {
                 return a;
               }}
             />
-            <div className="grid grid-cols-2 gap-2">
-              <select className="border rounded p-2" value={form.type}
-                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                {['kontrola', 'czyszczenie', 'inspekcja_kamera', 'montaz_wkladu', 'montaz_nasady', 'kontrola_gaz', 'opinia'].map(t =>
-                  <option key={t} value={t}>{visitTypeLabel[t]}</option>)}
+            <div>
+              <label className="form-label">Rodzaj</label>
+              <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                {TYPES.map(t => <option key={t} value={t}>{visitTypeLabel[t]}</option>)}
               </select>
-              <input className="border rounded p-2" type="number" min="15" step="15"
+            </div>
+            <div>
+              <label className="form-label">Czas (min)</label>
+              <input className="form-input" type="number" min="15" step="15" inputMode="numeric"
                 value={form.duration_min} onChange={e => setForm(f => ({ ...f, duration_min: e.target.value }))} />
             </div>
-            <textarea className="w-full border rounded p-2 text-sm" rows="2" placeholder="Uwagi"
-              value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-            <button className="w-full bg-orange-500 text-white py-2 rounded font-medium">Zaplanuj</button>
+            <div>
+              <label className="form-label">Uwagi</label>
+              <textarea className="form-input resize-none" rows="2"
+                value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
           </form>
-        </Modal>
-      )}
+        )}
+      </BottomSheet>
     </div>
   );
-
-  function shiftWeek(days) {
-    const d = new Date(weekStart); d.setDate(d.getDate() + days); setWeekStart(d);
-  }
-}
-
-function mondayOf(d) {
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1 - day);
-  const m = new Date(d); m.setDate(m.getDate() + diff); m.setHours(0, 0, 0, 0); return m;
-}
-function Modal({ children, onClose }) {
-  return <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-auto">
-      <button onClick={onClose} className="float-right text-slate-400">✕</button>{children}
-    </div></div>;
 }

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Download, FileText } from 'lucide-react';
 import { api } from '../../lib/api';
-import { fmtDateTime, statusLabel, statusColor, visitTypeLabel } from '../../lib/format';
+import { fmtDateTime, statusLabel, visitTypeLabel } from '../../lib/format';
+import MobilePageHeader from '../../components/mobile/MobilePageHeader';
+import StatusBadge from '../../components/mobile/StatusBadge';
+import EmptyState from '../../components/mobile/EmptyState';
 
 export default function Raporty() {
   const [visits, setVisits] = useState([]);
@@ -26,44 +30,51 @@ export default function Raporty() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Raporty</h1>
-        <button onClick={exportCsv} className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm">Eksport CSV</button>
+    <div className="panel-page">
+      <MobilePageHeader
+        title="Raporty"
+        right={(
+          <button onClick={exportCsv} className="btn-primary text-sm py-2">
+            <Download className="w-4 h-4" /> CSV
+          </button>
+        )}
+      />
+
+      <div className="grid grid-cols-3 gap-2">
+        <Stat label="Zakończone" value={done.length} />
+        <Stat label="Odmowa" value={refused.length} tone="rose" />
+        <Stat label="Łącznie" value={visits.length} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Stat label="Wykonane kontrole" value={done.length} />
-        <Stat label="Odmowa wpuszczenia" value={refused.length} tone="rose" />
-        <Stat label="Łącznie wizyt" value={visits.length} />
-      </div>
-
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="overflow-x-auto w-full pb-2"><table className="w-full text-sm whitespace-nowrap min-w-[600px]">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-600">
-            <tr>
-              <th className="text-left p-3">Data</th>
-              <th className="text-left p-3">Obiekt / lokal</th>
-              <th className="text-left p-3">Typ</th>
-              <th className="text-left p-3">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {visits.map(v => (
-              <tr key={v.id}>
-                <td className="p-3">{fmtDateTime(v.scheduled_at)}</td>
-                <td className="p-3">{v.building_address}{v.apt_number ? ` / m. ${v.apt_number}` : ''}</td>
-                <td className="p-3">{visitTypeLabel[v.type] || v.type}</td>
-                <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${statusColor[v.status]}`}>{statusLabel[v.status]}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+      <div className="mobile-stack">
+        {visits.length === 0 ? (
+          <EmptyState icon={FileText} title="Brak danych" body="Raporty pojawią się po pierwszych wizytach." />
+        ) : (
+          visits.map(v => (
+            <div key={v.id} className="mobile-card">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 truncate">
+                    {v.building_address}{v.apt_number ? ` / m. ${v.apt_number}` : ''}
+                  </div>
+                  <div className="text-xs text-slate-500">{fmtDateTime(v.scheduled_at)} • {visitTypeLabel[v.type] || v.type}</div>
+                </div>
+                <StatusBadge status={v.status} />
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
+
 function Stat({ label, value, tone = 'slate' }) {
   const c = tone === 'rose' ? 'bg-rose-50 border-rose-200' : 'bg-white';
-  return <div className={`rounded-xl border p-5 ${c}`}><div className="text-xs uppercase text-slate-500">{label}</div><div className="text-3xl font-bold mt-1">{value}</div></div>;
+  return (
+    <div className={`kpi-card ${c}`}>
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value mt-1">{value}</div>
+    </div>
+  );
 }
