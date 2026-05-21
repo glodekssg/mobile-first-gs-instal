@@ -67,7 +67,14 @@ export default function AdminUsers() {
     <div className="panel-page">
       <MobilePageHeader title="Użytkownicy" />
 
-      <FilterBar filters={filters} value={filter} onChange={setFilter} />
+      <div className="md:flex md:items-center md:justify-between md:gap-4">
+        <div className="flex-1 min-w-0">
+          <FilterBar filters={filters} value={filter} onChange={setFilter} />
+        </div>
+        <button onClick={openNew} className="btn-primary hidden md:flex items-center gap-2 mb-4 flex-shrink-0">
+          <Plus className="w-4 h-4" /> Nowy użytkownik
+        </button>
+      </div>
 
       <div className="mobile-stack">
         {filtered.length === 0 ? (

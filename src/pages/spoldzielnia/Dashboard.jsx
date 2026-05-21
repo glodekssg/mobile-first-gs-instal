@@ -61,7 +61,7 @@ export default function SpoldzielniaDashboard() {
           <h2 className="font-bold text-slate-900 mb-2 px-1">Akcje wymagające uwagi</h2>
           <div className="mobile-stack">
             {nba.map(a => (
-              <article key={a.id} className="mobile-card flex items-start gap-3">
+              <Link key={a.id} to="/panel/spoldzielnia/obiekty" className="mobile-card flex items-start gap-3 active:bg-slate-50">
                 <PriorityDot priority={a.priority} />
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-900">{a.title}</div>
@@ -73,7 +73,7 @@ export default function SpoldzielniaDashboard() {
                     </div>
                   )}
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         </section>
